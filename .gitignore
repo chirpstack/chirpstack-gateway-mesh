@@ -1,0 +1,16 @@
+# Hidden files
+.*
+!.cargo
+!.github
+!.vscode
+!.env
+
+# Config files
+/chirpstack-gateway-relay.toml
+
+# Rust target directory
+/target
+
+# IPK packages
+*.ipk
+/dist
