@@ -1,7 +1,7 @@
 use crate::config;
 use handlebars::{no_escape, Handlebars};
 
-pub fn run(conf: &config::Configuration) {
+pub fn run() {
     let template = r#"
 # Logging settings.
 [logging]
@@ -26,6 +26,13 @@ pub fn run(conf: &config::Configuration) {
 # Relay configuration.
 [relay]
 
+  # Border Gateway.
+  #
+  # If this is set to true, then the ChirpStack Gateway Relay will consider
+  # this gateway as a Border Gateway, meaning that it will unwrap relayed
+  # uplinks and forward these to the proxy API, rather than relaying these.
+  border_gateway={{ relay.border_gateway }}
+
   # Relay frequencies.
   #
   # The ChirpStack Gateway Relay will randomly use one of the configured
@@ -36,7 +43,7 @@ pub fn run(conf: &config::Configuration) {
     {{/each}}
   ]
 
-  # Proxy API configuration (Border Gateway mode).
+  # Proxy API configuration.
   #
   # If the Gateway Relay is configured to operate as Border Gateway. It
   # will unwrap relayed uplink frames, and will wrap downlink payloads that
@@ -82,11 +89,12 @@ pub fn run(conf: &config::Configuration) {
     command_url="{{ backend.relay_concentratord.command_url }}"
 "#;
 
+    let conf = config::get();
     let mut reg = Handlebars::new();
     reg.register_escape_fn(no_escape);
     println!(
         "{}",
-        reg.render_template(template, &conf)
+        reg.render_template(template, &(*conf))
             .expect("Render configfile error")
     );
 }

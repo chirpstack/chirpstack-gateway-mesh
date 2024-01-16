@@ -124,6 +124,7 @@ dependencies = [
  "log",
  "lrwn_filters",
  "once_cell",
+ "rand",
  "serde",
  "simple_logger",
  "syslog",

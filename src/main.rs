@@ -1,6 +1,3 @@
-#[macro_use]
-extern crate anyhow;
-
 use std::thread::sleep;
 use std::time::Duration;
 use std::{process, str::FromStr};
@@ -8,11 +5,7 @@ use std::{process, str::FromStr};
 use clap::{Parser, Subcommand};
 use log::info;
 
-mod backend;
-mod cmd;
-mod config;
-mod logging;
-mod packets;
+use chirpstack_gateway_relay::{cmd, config, logging};
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -28,20 +21,19 @@ struct Cli {
 enum Commands {
     /// Print the configuration template
     Configfile {},
-    /// Operate the Relay as Border Gateway
-    BorderGateway {},
 }
 
 #[tokio::main]
 async fn main() {
     let cli = Cli::parse();
-    let conf = config::Configuration::get(&cli.config).expect("Read configuration error");
+    config::Configuration::load(&cli.config).expect("Read configuration error");
 
     if let Some(Commands::Configfile {}) = &cli.command {
-        cmd::configfile::run(&conf);
+        cmd::configfile::run();
         process::exit(0);
     }
 
+    let conf = config::get();
     let log_level = log::Level::from_str(&conf.logging.level).expect("Parse log_level error");
 
     // Loop until success, as this will fail when syslog hasn't been fully started.
@@ -54,23 +46,13 @@ async fn main() {
         sleep(Duration::from_secs(1))
     }
 
-    let border_gateway = if let Some(Commands::BorderGateway {}) = &cli.command {
-        true
-    } else {
-        false
-    };
-
     info!(
         "Starting {} (border_gateway: {},version: {}, docs: {})",
         env!("CARGO_PKG_DESCRIPTION"),
-        border_gateway,
+        conf.relay.border_gateway,
         env!("CARGO_PKG_VERSION"),
         env!("CARGO_PKG_HOMEPAGE"),
     );
 
-    if border_gateway {
-        cmd::border_gateway::run(&conf).await.unwrap();
-    } else {
-        cmd::root::run(&conf).await.unwrap();
-    }
+    cmd::root::run(&conf).await.unwrap();
 }

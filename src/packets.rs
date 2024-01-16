@@ -1,5 +1,4 @@
 use anyhow::Result;
-use chirpstack_api::gw;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Packet {
@@ -29,7 +28,7 @@ impl Packet {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct RelayPacket {
     pub mhdr: MHDR,
     pub payload: Payload,
@@ -62,7 +61,7 @@ impl RelayPacket {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct MHDR {
     pub payload_type: PayloadType,
     pub hop_count: u8,
@@ -89,7 +88,7 @@ impl MHDR {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum PayloadType {
     Uplink,
     Downlink,
@@ -112,16 +111,16 @@ impl PayloadType {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Payload {
     Uplink(UplinkPayload),
     Downlink(DownlinkPayload),
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct UplinkPayload {
     pub metadata: UplinkMetadata,
-    pub relay_gateway_id: [u8; 4],
+    pub relay_id: [u8; 4],
     pub phy_payload: Vec<u8>,
 }
 
@@ -138,20 +137,20 @@ impl UplinkPayload {
 
         Ok(UplinkPayload {
             metadata: UplinkMetadata::from_bytes(md),
-            relay_gateway_id: gw_id,
+            relay_id: gw_id,
             phy_payload: b[9..].to_vec(),
         })
     }
 
     pub fn to_vec(&self) -> Result<Vec<u8>> {
         let mut b = self.metadata.to_bytes()?.to_vec();
-        b.extend_from_slice(&self.relay_gateway_id);
+        b.extend_from_slice(&self.relay_id);
         b.extend_from_slice(&self.phy_payload);
         Ok(b)
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct UplinkMetadata {
     pub uplink_id: u16,
     pub dr: u8,
@@ -218,10 +217,10 @@ impl UplinkMetadata {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct DownlinkPayload {
     pub metadata: DownlinkMetadata,
-    pub relay_gateway_id: [u8; 4],
+    pub relay_id: [u8; 4],
     pub phy_payload: Vec<u8>,
 }
 
@@ -238,20 +237,20 @@ impl DownlinkPayload {
 
         Ok(DownlinkPayload {
             metadata: DownlinkMetadata::from_bytes(md),
-            relay_gateway_id: gw_id,
+            relay_id: gw_id,
             phy_payload: b[10..].to_vec(),
         })
     }
 
     pub fn to_vec(&self) -> Result<Vec<u8>> {
         let mut b = self.metadata.to_bytes()?.to_vec();
-        b.extend_from_slice(&self.relay_gateway_id);
+        b.extend_from_slice(&self.relay_id);
         b.extend_from_slice(&self.phy_payload);
         Ok(b)
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct DownlinkMetadata {
     pub uplink_id: u16,
     pub dr: u8,
@@ -590,7 +589,7 @@ mod test {
                     snr: -12,
                     channel: 64,
                 },
-                relay_gateway_id: [0x01, 0x02, 0x03, 0x04],
+                relay_id: [0x01, 0x02, 0x03, 0x04],
                 phy_payload: vec![0x05],
             },
             up_pl,
@@ -607,7 +606,7 @@ mod test {
                 snr: -12,
                 channel: 64,
             },
-            relay_gateway_id: [0x01, 0x02, 0x03, 0x04],
+            relay_id: [0x01, 0x02, 0x03, 0x04],
             phy_payload: vec![0x05],
         };
         let b = up_pl.to_vec().unwrap();
@@ -736,7 +735,7 @@ mod test {
                     frequency: 868100000,
                     delay: 16,
                 },
-                relay_gateway_id: [0x01, 0x02, 0x03, 0x04],
+                relay_id: [0x01, 0x02, 0x03, 0x04],
                 phy_payload: vec![0x05],
             },
             dn_pl,
@@ -752,7 +751,7 @@ mod test {
                 frequency: 868100000,
                 delay: 16,
             },
-            relay_gateway_id: [0x01, 0x02, 0x03, 0x04],
+            relay_id: [0x01, 0x02, 0x03, 0x04],
             phy_payload: vec![0x05],
         };
         let b = dn_pl.to_vec().unwrap();
@@ -789,7 +788,7 @@ mod test {
                             snr: -12,
                             channel: 64,
                         },
-                        relay_gateway_id: [0x01, 0x02, 0x03, 0x04],
+                        relay_id: [0x01, 0x02, 0x03, 0x04],
                         phy_payload: vec![0x05],
                     }),
                 },
@@ -811,7 +810,7 @@ mod test {
                             frequency: 868100000,
                             delay: 16,
                         },
-                        relay_gateway_id: [0x01, 0x02, 0x03, 0x04],
+                        relay_id: [0x01, 0x02, 0x03, 0x04],
                         phy_payload: vec![0x05],
                     }),
                 },
@@ -852,7 +851,7 @@ mod test {
                             snr: -12,
                             channel: 64,
                         },
-                        relay_gateway_id: [0x01, 0x02, 0x03, 0x04],
+                        relay_id: [0x01, 0x02, 0x03, 0x04],
                         phy_payload: vec![0x05],
                     }),
                 },
@@ -874,7 +873,7 @@ mod test {
                             frequency: 868100000,
                             delay: 16,
                         },
-                        relay_gateway_id: [0x01, 0x02, 0x03, 0x04],
+                        relay_id: [0x01, 0x02, 0x03, 0x04],
                         phy_payload: vec![0x05],
                     }),
                 },
@@ -915,7 +914,7 @@ mod test {
                             snr: -12,
                             channel: 64,
                         },
-                        relay_gateway_id: [0x01, 0x02, 0x03, 0x04],
+                        relay_id: [0x01, 0x02, 0x03, 0x04],
                         phy_payload: vec![0x05],
                     }),
                 }),
@@ -961,7 +960,7 @@ mod test {
                             snr: -12,
                             channel: 64,
                         },
-                        relay_gateway_id: [0x01, 0x02, 0x03, 0x04],
+                        relay_id: [0x01, 0x02, 0x03, 0x04],
                         phy_payload: vec![0x05],
                     }),
                 }),
