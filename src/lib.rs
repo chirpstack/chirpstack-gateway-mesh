@@ -1,7 +1,7 @@
 #[macro_use]
 extern crate anyhow;
 
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use once_cell::sync::Lazy;
 
@@ -14,4 +14,5 @@ pub mod packets;
 pub mod proxy;
 pub mod relay;
 
-pub static ZMQ_CONTEXT: Lazy<Mutex<zmq::Context>> = Lazy::new(|| Mutex::new(zmq::Context::new()));
+// pub static ZMQ_CONTEXT: Lazy<Arc<Mutex<zmq::Context>>> =
+//     Lazy::new(|| Arc::new(Mutex::new(zmq::Context::new())));

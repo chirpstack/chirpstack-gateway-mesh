@@ -15,7 +15,7 @@ pub fn run() {
   #   * WARN
   #   * ERROR
   #   * OFF
-  log_level="INFO"
+  level="INFO"
 
   # Log to syslog.
   #
@@ -42,6 +42,28 @@ pub fn run() {
     {{this}},
     {{/each}}
   ]
+
+  # Tx-power (EIRP).
+  tx_power={{ relay.tx_power }}
+
+  # Data-rate properties.
+  [relay.data_rate]
+  
+    # Modulation.
+    modulation="{{ relay.data_rate.modulation }}"
+
+    # Spreading-factor.
+    spreading_factor={{ relay.data_rate.spreading_factor }}
+
+    # Bandwidth.
+    bandwidth={{ relay.data_rate.bandwidth }}
+
+    # Code-rate.
+    code_rate="{{ relay.data_rate.code_rate }}"
+
+    # Bitrate.
+    bitrate={{ relay_data_rate.bitrate }}
+
 
   # Proxy API configuration.
   #

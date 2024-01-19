@@ -91,8 +91,8 @@ pub struct ProxyApi {
 impl Default for ProxyApi {
     fn default() -> Self {
         ProxyApi {
-            event_bind: "ipc:///tmp/chirpstack_gateway_relay_event".into(),
-            command_bind: "ipc:///tmp/chirpstack_gateway_relay_command".into(),
+            event_bind: "ipc:///tmp/gateway_relay_event".into(),
+            command_bind: "ipc:///tmp/gateway_relay_command".into(),
         }
     }
 }
@@ -114,18 +114,13 @@ pub struct DataRate {
     pub bitrate: u32,
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
 #[allow(non_camel_case_types)]
 #[allow(clippy::upper_case_acronyms)]
 pub enum Modulation {
+    #[default]
     LORA,
     FSK,
-}
-
-impl Default for Modulation {
-    fn default() -> Self {
-        Modulation::LORA
-    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]

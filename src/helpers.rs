@@ -82,7 +82,7 @@ pub fn dr_to_modulation(dr: u8, ipol: bool) -> Result<gw::Modulation> {
         .get(dr as usize)
         .ok_or_else(|| anyhow!("Data-rate {} does not map to a modulation", dr))?;
 
-    Ok(data_rate_to_gw_modulation(&dr, ipol))
+    Ok(data_rate_to_gw_modulation(dr, ipol))
 }
 
 pub fn data_rate_to_gw_modulation(dr: &config::DataRate, ipol: bool) -> gw::Modulation {

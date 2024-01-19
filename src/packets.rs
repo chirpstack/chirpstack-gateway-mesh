@@ -171,7 +171,7 @@ impl UplinkMetadata {
         UplinkMetadata {
             uplink_id: u16::from_be_bytes([b[0], b[1]]) >> 4,
             dr: b[1] & 0x0f,
-            rssi: -1 * (b[2] as i16),
+            rssi: -(b[2] as i16),
             snr,
             channel: b[4],
         }
@@ -206,7 +206,7 @@ impl UplinkMetadata {
         Ok([
             uplink_id_b[0],
             uplink_id_b[1] | self.dr,
-            (-1 * self.rssi) as u8,
+            -self.rssi as u8,
             if self.snr < 0 {
                 (self.snr + 64) as u8
             } else {

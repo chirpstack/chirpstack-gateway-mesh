@@ -9,7 +9,7 @@ use once_cell::sync::OnceCell;
 use tokio::task;
 
 use crate::config::Configuration;
-use crate::{relay, ZMQ_CONTEXT};
+use crate::{proxy, relay};
 use chirpstack_api::gw;
 
 static CONCENTRATORD: OnceCell<Backend> = OnceCell::new();
@@ -27,7 +27,7 @@ async fn setup_concentratord(conf: &Configuration) -> Result<()> {
         conf.backend.concentratord.event_url, conf.backend.concentratord.command_url
     );
 
-    let zmq_ctx = ZMQ_CONTEXT.lock().unwrap();
+    let zmq_ctx = zmq::Context::new();
     let event_sock = zmq_ctx.socket(zmq::SUB)?;
     event_sock.connect(&conf.backend.concentratord.event_url)?;
     event_sock.set_subscribe("".as_bytes())?;
@@ -37,10 +37,10 @@ async fn setup_concentratord(conf: &Configuration) -> Result<()> {
 
     let mut b = Backend {
         cmd_url: conf.backend.concentratord.command_url.clone(),
-        cmd_sock: Mutex::new(cmd_sock),
+        cmd_sock: Arc::new(Mutex::new(cmd_sock)),
         gateway_id: None,
     };
-    b.read_gateway_id()?;
+    b.read_gateway_id().await?;
 
     tokio::spawn({
         let border_gateway = conf.relay.border_gateway;
@@ -67,7 +67,7 @@ async fn setup_relay_concentratord(conf: &Configuration) -> Result<()> {
         conf.backend.relay_concentratord.event_url, conf.backend.relay_concentratord.command_url
     );
 
-    let zmq_ctx = ZMQ_CONTEXT.lock().unwrap();
+    let zmq_ctx = zmq::Context::new();
     let event_sock = zmq_ctx.socket(zmq::SUB)?;
     event_sock.connect(&conf.backend.relay_concentratord.event_url)?;
     event_sock.set_subscribe("".as_bytes())?;
@@ -77,10 +77,10 @@ async fn setup_relay_concentratord(conf: &Configuration) -> Result<()> {
 
     let mut b = Backend {
         cmd_url: conf.backend.concentratord.command_url.clone(),
-        cmd_sock: Mutex::new(cmd_sock),
+        cmd_sock: Arc::new(Mutex::new(cmd_sock)),
         gateway_id: None,
     };
-    b.read_gateway_id()?;
+    b.read_gateway_id().await?;
 
     tokio::spawn({
         let border_gateway = conf.relay.border_gateway;
@@ -99,33 +99,48 @@ async fn setup_relay_concentratord(conf: &Configuration) -> Result<()> {
 
 struct Backend {
     cmd_url: String,
-    cmd_sock: Mutex<zmq::Socket>,
+    cmd_sock: Arc<Mutex<zmq::Socket>>,
     gateway_id: Option<[u8; 8]>,
 }
 
 impl Backend {
-    fn read_gateway_id(&mut self) -> Result<()> {
-        let cmd_sock = self.cmd_sock.lock().unwrap();
+    async fn read_gateway_id(&mut self) -> Result<()> {
+        trace!("Reading gateway ID");
 
-        // send 'gateway_id' command with empty payload.
-        cmd_sock.send("gateway_id", zmq::SNDMORE)?;
-        cmd_sock.send("", 0)?;
+        let gateway_id = task::spawn_blocking({
+            let cmd_sock = self.cmd_sock.clone();
 
-        // set poller so that we can timeout after 100ms
-        let mut items = [cmd_sock.as_poll_item(zmq::POLLIN)];
-        zmq::poll(&mut items, 100)?;
-        if !items[0].is_readable() {
-            return Err(anyhow!("Could not read gateway id"));
-        }
+            move || -> Result<[u8; 8]> {
+                let cmd_sock = cmd_sock.lock().unwrap();
 
-        let mut gateway_id: [u8; 8] = [0; 8];
-        gateway_id.copy_from_slice(&cmd_sock.recv_bytes(0)?);
+                // send 'gateway_id' command with empty payload.
+                cmd_sock.send("gateway_id", zmq::SNDMORE)?;
+                cmd_sock.send("", 0)?;
+
+                // set poller so that we can timeout after 100ms
+                let mut items = [cmd_sock.as_poll_item(zmq::POLLIN)];
+                zmq::poll(&mut items, 100)?;
+                if !items[0].is_readable() {
+                    return Err(anyhow!("Could not read gateway id"));
+                }
+
+                let mut gateway_id: [u8; 8] = [0; 8];
+                gateway_id.copy_from_slice(&cmd_sock.recv_bytes(0)?);
+                info!("Retrieved gateway_id: {}", hex::encode(gateway_id));
+
+                Ok(gateway_id)
+            }
+        })
+        .await??;
+
         self.gateway_id = Some(gateway_id);
 
         Ok(())
     }
 
     fn send_command(&self, cmd: &str, b: &[u8]) -> Result<Vec<u8>> {
+        trace!("Sending command, cmd: {}, bytes: {}", cmd, hex::encode(b));
+
         let res = || -> Result<Vec<u8>> {
             let cmd_sock = self.cmd_sock.lock().unwrap();
             cmd_sock.send(cmd, zmq::SNDMORE)?;
@@ -170,7 +185,7 @@ impl Backend {
             "Re-connecting to Concentratord command API, command_url: {}",
             self.cmd_url
         );
-        let zmq_ctx = ZMQ_CONTEXT.lock().unwrap();
+        let zmq_ctx = zmq::Context::new();
         let mut cmd_sock = self.cmd_sock.lock().unwrap();
         *cmd_sock = zmq_ctx.socket(zmq::REQ)?;
         cmd_sock.connect(&self.cmd_url)?;
@@ -234,6 +249,12 @@ async fn handle_event_msg(
 ) -> Result<()> {
     let event = String::from_utf8(event.to_vec())?;
 
+    trace!(
+        "Handling event, event: {}, data: {}",
+        event,
+        hex::encode(pl)
+    );
+
     match event.as_str() {
         "up" => {
             let pl = gw::UplinkFrame::decode(pl)?;
@@ -248,8 +269,16 @@ async fn handle_event_msg(
                     return Ok(());
                 }
 
-                // Note that proprietary frames will always pass as these can't be
-                // filtered.
+                // Filter out proprietary payloads.
+                if pl.phy_payload.first().cloned().unwrap_or_default() & 0xe0 != 0 {
+                    debug!(
+                        "Discarding proprietary uplink, uplink_id: {}",
+                        rx_info.uplink_id
+                    );
+                    return Ok(());
+                }
+
+                // Filter uplinks based on DevAddr and JoinEUI filters.
                 if !lrwn_filters::matches(&pl.phy_payload, filters) {
                     debug!(
                         "Discarding uplink because of dev_addr and join_eui filters, uplink_id: {}",
@@ -261,8 +290,10 @@ async fn handle_event_msg(
             }
         }
         "stats" => {
-            let pl = gw::GatewayStats::decode(pl)?;
-            relay::handle_stats(border_gateway, pl).await?;
+            if border_gateway {
+                let pl = gw::GatewayStats::decode(pl)?;
+                proxy::send_stats(&pl).await?;
+            }
         }
         _ => {
             return Ok(());
@@ -274,6 +305,12 @@ async fn handle_event_msg(
 
 async fn handle_relay_event_msg(border_gateway: bool, event: &[u8], pl: &[u8]) -> Result<()> {
     let event = String::from_utf8(event.to_vec())?;
+
+    trace!(
+        "Handling relay event, event: {}, data: {}",
+        event,
+        hex::encode(pl)
+    );
 
     match event.as_str() {
         "up" => {
@@ -292,7 +329,7 @@ async fn handle_relay_event_msg(border_gateway: bool, event: &[u8], pl: &[u8]) -
 
             // The relay event msg must always be a proprietary payload.
             if pl.phy_payload.first().cloned().unwrap_or_default() & 0xe0 != 0 {
-                relay::handle_uplink(border_gateway, pl).await?;
+                relay::handle_relay(border_gateway, pl).await?;
             }
         }
         _ => {
@@ -326,6 +363,12 @@ async fn read_event(event_sock: Arc<Mutex<zmq::Socket>>) -> Result<Vec<Vec<u8>>>
 }
 
 async fn send_command(cmd: &str, b: &[u8]) -> Result<Vec<u8>> {
+    trace!(
+        "Sending command, command: {}, data: {}",
+        cmd,
+        hex::encode(b)
+    );
+
     task::spawn_blocking({
         let cmd = cmd.to_string();
         let b = b.to_vec();
@@ -342,6 +385,12 @@ async fn send_command(cmd: &str, b: &[u8]) -> Result<Vec<u8>> {
 }
 
 async fn send_relay_command(cmd: &str, b: &[u8]) -> Result<Vec<u8>> {
+    trace!(
+        "Sending relay command, command: {}, data: {}",
+        cmd,
+        hex::encode(b)
+    );
+
     task::spawn_blocking({
         let cmd = cmd.to_string();
         let b = b.to_vec();
@@ -358,6 +407,8 @@ async fn send_relay_command(cmd: &str, b: &[u8]) -> Result<Vec<u8>> {
 }
 
 pub async fn relay(pl: &gw::DownlinkFrame) -> Result<()> {
+    info!("Sending relay payload, downlink_id: {}", pl.downlink_id);
+
     let tx_ack = {
         let b = pl.encode_to_vec();
         let resp_b = send_relay_command("down", &b).await?;
@@ -372,8 +423,14 @@ pub async fn relay(pl: &gw::DownlinkFrame) -> Result<()> {
         .collect();
 
     if !tx_ack_ok.is_empty() {
+        info!("Enqueue acknowledged, downlink_id: {}", pl.downlink_id);
         return Ok(());
     }
+
+    warn!(
+        "Enqueue not acknowledged, downlink_id: {}, acks: {:?}",
+        pl.downlink_id, tx_ack.items
+    );
 
     Err(anyhow!(
         "Relay failed: {}",
@@ -387,41 +444,45 @@ pub async fn relay(pl: &gw::DownlinkFrame) -> Result<()> {
     ))
 }
 
-pub async fn send_downlink(pl: &gw::DownlinkFrame) -> Result<()> {
-    let tx_ack = {
-        let b = pl.encode_to_vec();
-        let resp_b = send_command("down", &b).await?;
-        gw::DownlinkTxAck::decode(resp_b.as_slice())?
-    };
+pub async fn send_downlink(pl: &gw::DownlinkFrame) -> Result<gw::DownlinkTxAck> {
+    info!("Sending downlink, downlink_id: {}", pl.downlink_id);
 
-    let tx_ack_ok: Vec<gw::DownlinkTxAckItem> = tx_ack
-        .items
-        .iter()
-        .filter(|v| v.status() == gw::TxAckStatus::Ok)
-        .cloned()
-        .collect();
+    let b = pl.encode_to_vec();
+    let resp_b = send_command("down", &b).await?;
+    let tx_ack = gw::DownlinkTxAck::decode(resp_b.as_slice())?;
 
-    if !tx_ack_ok.is_empty() {
-        return Ok(());
-    }
+    Ok(tx_ack)
+}
 
-    Err(anyhow!(
-        "Send downlink failed: {}",
-        tx_ack
-            .items
-            .last()
-            .cloned()
-            .unwrap_or_default()
-            .status()
-            .as_str_name()
-    ))
+pub async fn send_gateway_configuration(pl: &gw::GatewayConfiguration) -> Result<()> {
+    info!("Sending gateway configuration, version: {}", pl.version);
+
+    let b = pl.encode_to_vec();
+    let _ = send_command("config", &b).await?;
+
+    Ok(())
 }
 
 pub fn get_relay_id() -> Result<[u8; 4]> {
+    trace!("Getting relay ID");
+
     if let Some(rc) = RELAY_CONCENTRATORD.get() {
         let mut relay_id: [u8; 4] = [0; 4];
-        relay_id.copy_from_slice(&rc.gateway_id.unwrap_or_default()[4..])
+        relay_id.copy_from_slice(&rc.gateway_id.unwrap_or_default()[4..]);
+        return Ok(relay_id);
     }
 
     Err(anyhow!("RELAY_CONCENTRATORD is not (yet) initialized"))
+}
+
+pub fn get_gateway_id() -> Result<[u8; 8]> {
+    trace!("Getting gateway ID");
+
+    if let Some(c) = CONCENTRATORD.get() {
+        let mut gateway_id: [u8; 8] = [0; 8];
+        gateway_id.copy_from_slice(&c.gateway_id.unwrap_or_default());
+        return Ok(gateway_id);
+    }
+
+    Err(anyhow!("CONCENTRATORD is not (yet) initialized"))
 }
