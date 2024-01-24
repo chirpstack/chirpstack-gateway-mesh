@@ -19,7 +19,7 @@
   chirpstack_api = { version = "4.6", default-features = false }
   lrwn_filters = { version = "4.6", features = ["serde"] }
   log = "0.4"
-  simple_logger = "4.2"
+  simple_logger = "4.3"
   syslog = "6.1"
   toml = "0.8"
   handlebars = "4.4"
