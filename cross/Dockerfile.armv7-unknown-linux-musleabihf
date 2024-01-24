@@ -1,0 +1,6 @@
+FROM ghcr.io/cross-rs/armv7-unknown-linux-musleabihf:latest
+
+RUN apt-get update && \
+    apt-get --assume-yes install \
+    protobuf-compiler \
+    libprotobuf-dev

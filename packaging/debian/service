@@ -1,0 +1,14 @@
+[Unit]
+Description=ChirpStack Gateway Relay
+Documentation=https://www.chirpstack.io/
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=chirpstack
+Group=chirpstack
+ExecStart=/usr/bin/chirpstack-gateway-relay -c /etc/chirpstack-gateway-relay/chirpstack-gateway-relay.toml -c /etc/chirpstack-gateway-relay/region.toml
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

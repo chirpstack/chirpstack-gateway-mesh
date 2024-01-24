@@ -1,0 +1,131 @@
+#[macro_use]
+extern crate anyhow;
+
+use chirpstack_api::gw;
+use chirpstack_api::prost::Message;
+use zeromq::{SocketRecv, SocketSend};
+
+use chirpstack_gateway_relay::{packets, relay};
+
+mod common;
+
+/*
+    This tests the scenario when the Relay Gateway receives a relay encapsulated
+    downlink LoRaWAN frame. The Relay Gateway will unwrap the LoRaWAN frame before
+    sending the downlink to the device.
+*/
+#[tokio::test]
+async fn test_relay_gateway_downlink_lora() {
+    common::setup(false).await;
+
+    let uplink_id = relay::store_uplink_context(&[5, 4, 3, 2, 1]);
+
+    let down_packet = packets::RelayPacket {
+        mhdr: packets::MHDR {
+            payload_type: packets::PayloadType::Downlink,
+            hop_count: 0,
+        },
+        payload: packets::Payload::Downlink(packets::DownlinkPayload {
+            metadata: packets::DownlinkMetadata {
+                uplink_id: uplink_id,
+                dr: 0,
+                frequency: 867100000,
+                tx_power: 1,
+                delay: 5,
+            },
+            relay_id: [2, 2, 2, 2],
+            phy_payload: vec![9, 8, 7, 6, 5],
+        }),
+    };
+
+    // The packet that we received from the Border Gateway that must be relayed to
+    // the End Device.
+    let up = gw::UplinkFrame {
+        phy_payload: down_packet.to_vec().unwrap(),
+        tx_info: Some(gw::UplinkTxInfo {
+            frequency: 868100000,
+            modulation: Some(gw::Modulation {
+                parameters: Some(gw::modulation::Parameters::Lora(gw::LoraModulationInfo {
+                    bandwidth: 125000,
+                    spreading_factor: 12,
+                    code_rate: gw::CodeRate::Cr45.into(),
+                    ..Default::default()
+                })),
+            }),
+        }),
+        rx_info: Some(gw::UplinkRxInfo {
+            gateway_id: "0101010101010101".into(),
+            crc_status: gw::CrcStatus::CrcOk.into(),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+
+    // Publish uplink.
+    // (we simulate that we receive the relay encapsulated downlink)
+    {
+        let mut event_sock = common::RELAY_BACKEND_EVENT_SOCK.get().unwrap().lock().await;
+        event_sock
+            .send(
+                vec![
+                    bytes::Bytes::from("up"),
+                    bytes::Bytes::from(up.encode_to_vec()),
+                ]
+                .try_into()
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+    }
+
+    // We expect that the unwrapped downlink was sent to the concentratord.
+    let mut down = {
+        let mut cmd_sock = common::BACKEND_COMMAND_SOCK.get().unwrap().lock().await;
+        let msg = cmd_sock.recv().await.unwrap();
+
+        let cmd = String::from_utf8(msg.get(0).map(|v| v.to_vec()).unwrap()).unwrap();
+        assert_eq!("down", cmd);
+
+        gw::DownlinkFrame::decode(msg.get(1).cloned().unwrap()).unwrap()
+    };
+
+    assert_ne!(0, down.downlink_id);
+    down.downlink_id = 0;
+
+    assert_eq!(
+        gw::DownlinkFrame {
+            gateway_id: "0101010101010101".into(),
+            items: vec![gw::DownlinkFrameItem {
+                phy_payload: vec![9, 8, 7, 6, 5],
+                tx_info: Some(gw::DownlinkTxInfo {
+                    frequency: 867100000,
+                    power: 16,
+                    modulation: Some(gw::Modulation {
+                        parameters: Some(gw::modulation::Parameters::Lora(
+                            gw::LoraModulationInfo {
+                                bandwidth: 125000,
+                                spreading_factor: 12,
+                                code_rate: gw::CodeRate::Cr45.into(),
+                                polarization_inversion: true,
+                                ..Default::default()
+                            }
+                        ))
+                    }),
+                    timing: Some(gw::Timing {
+                        parameters: Some(gw::timing::Parameters::Delay(gw::DelayTimingInfo {
+                            delay: Some(prost_types::Duration {
+                                seconds: 5,
+                                nanos: 0
+                            }),
+                        })),
+                    }),
+                    context: vec![5, 4, 3, 2, 1],
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }],
+            ..Default::default()
+        },
+        down
+    );
+}
