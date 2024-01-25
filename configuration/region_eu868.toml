@@ -1,9 +1,9 @@
 [mappings]
 
   channels = [
+    868100000,
     868300000,
     868500000,
-    868700000,
     867100000,
     867300000,
     867500000,
@@ -16,43 +16,43 @@
   [[mappings.data_rates]]
     modulation = "LORA"
     spreading_factor = 12
-    bandwidth = 1250000
+    bandwidth = 125000
     code_rate = "4/5"
 
   [[mappings.data_rates]]
     modulation = "LORA"
     spreading_factor = 11
-    bandwidth = 1250000
+    bandwidth = 125000
     code_rate = "4/5"
 
   [[mappings.data_rates]]
     modulation = "LORA"
     spreading_factor = 10
-    bandwidth = 1250000
+    bandwidth = 125000
     code_rate = "4/5"
 
   [[mappings.data_rates]]
     modulation = "LORA"
     spreading_factor = 9
-    bandwidth = 1250000
+    bandwidth = 125000
     code_rate = "4/5"
 
   [[mappings.data_rates]]
     modulation = "LORA"
     spreading_factor = 8
-    bandwidth = 1250000
+    bandwidth = 125000
     code_rate = "4/5"
 
   [[mappings.data_rates]]
     modulation = "LORA"
     spreading_factor = 7
-    bandwidth = 1250000
+    bandwidth = 125000
     code_rate = "4/5"
 
   [[mappings.data_rates]]
     modulation = "LORA"
     spreading_factor = 7
-    bandwidth = 2500000
+    bandwidth = 250000
     code_rate = "4/5"
 
   [[mappings.data_rate]]
