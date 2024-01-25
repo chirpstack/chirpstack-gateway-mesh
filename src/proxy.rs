@@ -9,6 +9,7 @@ use zeromq::{Socket, SocketRecv, SocketSend};
 use crate::backend;
 use crate::cleanup_socket_file;
 use crate::config::Configuration;
+use crate::helpers;
 use crate::relay;
 
 static EVENT_SOCKET: OnceCell<Mutex<zeromq::PubSocket>> = OnceCell::new();
@@ -53,13 +54,7 @@ pub async fn setup(conf: &Configuration) -> Result<()> {
 }
 
 pub async fn send_uplink(pl: &gw::UplinkFrame) -> Result<()> {
-    info!(
-        "Sending uplink event, uplink_id: {}",
-        pl.rx_info
-            .as_ref()
-            .ok_or_else(|| anyhow!("rx_info is None"))?
-            .uplink_id
-    );
+    info!("Sending uplink event - {}", helpers::format_uplink(pl)?);
 
     let b = pl.encode_to_vec();
     let event_socket = EVENT_SOCKET
@@ -79,7 +74,7 @@ pub async fn send_uplink(pl: &gw::UplinkFrame) -> Result<()> {
 }
 
 pub async fn send_stats(pl: &gw::GatewayStats) -> Result<()> {
-    info!("Sending stats event");
+    info!("Sending gateway stats event");
 
     let b = pl.encode_to_vec();
     let event_socket = EVENT_SOCKET
@@ -144,7 +139,10 @@ async fn handle_command(cmd: &str, pl: bytes::Bytes) -> Result<Vec<u8>> {
         }
         "down" => {
             let pl = gw::DownlinkFrame::decode(pl)?;
-            info!("Downlink command received, downlink_id: {}", pl.downlink_id);
+            info!(
+                "Downlink command received - {}",
+                helpers::format_downlink(&pl)?
+            );
             relay::handle_downlink(pl)
                 .await
                 .map(|v| v.encode_to_vec())?

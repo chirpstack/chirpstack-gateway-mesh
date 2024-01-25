@@ -258,12 +258,14 @@ async fn handle_event_msg(
                     )
                 }
 
+                info!("Frame received - {}", helpers::format_uplink(&pl)?);
                 relay::handle_uplink(border_gateway, pl).await?;
             }
         }
         "stats" => {
             if border_gateway {
                 let pl = gw::GatewayStats::decode(pl)?;
+                info!("Gateway stats received, gateway_id: {}", pl.gateway_id);
                 proxy::send_stats(&pl).await?;
             }
         }
@@ -301,6 +303,7 @@ async fn handle_relay_event_msg(border_gateway: bool, event: &[u8], pl: &[u8]) -
 
             // The relay event msg must always be a proprietary payload.
             if pl.phy_payload.first().cloned().unwrap_or_default() & 0xe0 != 0 {
+                info!("Relay frame received - {}", helpers::format_uplink(&pl)?);
                 relay::handle_relay(border_gateway, pl).await?;
             }
         }
@@ -343,7 +346,7 @@ async fn send_relay_command(cmd: &str, b: &[u8]) -> Result<Vec<u8>> {
 }
 
 pub async fn relay(pl: &gw::DownlinkFrame) -> Result<()> {
-    info!("Sending relay payload, downlink_id: {}", pl.downlink_id);
+    info!("Sending relay frame - {}", helpers::format_downlink(pl)?);
 
     let tx_ack = {
         let b = pl.encode_to_vec();
@@ -356,7 +359,7 @@ pub async fn relay(pl: &gw::DownlinkFrame) -> Result<()> {
 }
 
 pub async fn send_downlink(pl: &gw::DownlinkFrame) -> Result<gw::DownlinkTxAck> {
-    info!("Sending downlink, downlink_id: {}", pl.downlink_id);
+    info!("Sending downlink frame - {}", helpers::format_downlink(pl)?);
 
     let b = pl.encode_to_vec();
     let resp_b = send_command("down", &b).await?;

@@ -178,3 +178,90 @@ pub fn tx_ack_to_err(tx_ack: &gw::DownlinkTxAck) -> Result<()> {
         Ok(())
     }
 }
+
+pub fn format_uplink(pl: &gw::UplinkFrame) -> Result<String> {
+    let tx_info = pl
+        .tx_info
+        .as_ref()
+        .ok_or_else(|| anyhow!("tx_info is None"))?;
+
+    let rx_info = pl
+        .rx_info
+        .as_ref()
+        .ok_or_else(|| anyhow!("rx_info is None"))?;
+
+    let modulation = tx_info
+        .modulation
+        .as_ref()
+        .ok_or_else(|| anyhow!("modulation is None"))?;
+
+    Ok(format!(
+        "[uplink_id: {}, freq: {}, rssi: {}, snr: {}, mod: {}]",
+        rx_info.uplink_id,
+        tx_info.frequency,
+        rx_info.rssi,
+        rx_info.snr,
+        format_modulation(&modulation)
+    ))
+}
+
+pub fn format_downlink(pl: &gw::DownlinkFrame) -> Result<String> {
+    let mut out: Vec<String> = Vec::new();
+
+    for i in &pl.items {
+        let tx_info = i
+            .tx_info
+            .as_ref()
+            .ok_or_else(|| anyhow!("tx_info is None"))?;
+
+        let modulation = tx_info
+            .modulation
+            .as_ref()
+            .ok_or_else(|| anyhow!("modulation is None"))?;
+
+        let timing = tx_info
+            .timing
+            .as_ref()
+            .ok_or_else(|| anyhow!("timing is None"))?;
+
+        out.push(format!(
+            "[freq: {}, power: {}, mod: {}, timing: {}]",
+            tx_info.frequency,
+            tx_info.power,
+            format_modulation(&modulation),
+            format_timing(&timing),
+        ));
+    }
+
+    Ok(format!(
+        "[downlink_id: {} - {}]",
+        pl.downlink_id,
+        out.join(", ")
+    ))
+}
+
+fn format_modulation(pl: &gw::Modulation) -> String {
+    match &pl.parameters {
+        Some(gw::modulation::Parameters::Lora(v)) => {
+            format!("[LORA - sf: {}, bw: {}]", v.spreading_factor, v.bandwidth)
+        }
+        Some(gw::modulation::Parameters::Fsk(v)) => format!("[FSK - bitrate: {}", v.datarate),
+        _ => "".to_string(),
+    }
+}
+
+fn format_timing(pl: &gw::Timing) -> String {
+    match &pl.parameters {
+        Some(gw::timing::Parameters::Delay(v)) => {
+            format!(
+                "[DELAY: {}",
+                v.delay
+                    .as_ref()
+                    .map(|v| v.seconds.to_string())
+                    .unwrap_or_default()
+            )
+        }
+        Some(gw::timing::Parameters::Immediately(_)) => "[IMMEDIATELY]".to_string(),
+        _ => "".to_string(),
+    }
+}

@@ -1,3 +1,5 @@
+use std::fmt;
+
 use anyhow::Result;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -58,6 +60,29 @@ impl RelayPacket {
             Payload::Downlink(v) => v.to_vec()?,
         });
         Ok(b)
+    }
+}
+
+impl fmt::Display for RelayPacket {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match &self.payload {
+            Payload::Uplink(v) => write!(
+                f,
+                "[{:?} hop_count: {}, uplink_id: {}, relay_id: {}]",
+                self.mhdr.payload_type,
+                self.mhdr.hop_count,
+                v.metadata.uplink_id,
+                hex::encode(v.relay_id),
+            ),
+            Payload::Downlink(v) => write!(
+                f,
+                "[{:?} hop_count: {}, uplink_id: {}, relay_id: {}]",
+                self.mhdr.payload_type,
+                self.mhdr.hop_count,
+                v.metadata.uplink_id,
+                hex::encode(v.relay_id)
+            ),
+        }
     }
 }
 

@@ -3,7 +3,7 @@ use std::sync::Mutex;
 
 use anyhow::Result;
 use chirpstack_api::gw;
-use log::{trace, warn};
+use log::{info, trace, warn};
 use once_cell::sync::Lazy;
 use rand::random;
 
@@ -65,10 +65,18 @@ pub async fn handle_downlink(pl: gw::DownlinkFrame) -> Result<gw::DownlinkTxAck>
 }
 
 async fn proxy_downlink_lora_packet(pl: &gw::DownlinkFrame) -> Result<gw::DownlinkTxAck> {
+    info!(
+        "Proxying LoRaWAN downlink, downlink: {}",
+        helpers::format_downlink(pl)?
+    );
     backend::send_downlink(pl).await
 }
 
 async fn proxy_uplink_lora_packet(pl: &gw::UplinkFrame) -> Result<()> {
+    info!(
+        "Proxying LoRaWAN uplink, uplink: {}",
+        helpers::format_uplink(pl)?
+    );
     proxy::send_uplink(pl).await
 }
 
@@ -79,6 +87,12 @@ async fn proxy_uplink_relay_packet(pl: &gw::UplinkFrame, packet: RelayPacket) ->
             return Err(anyhow!("Expected Uplink payload"));
         }
     };
+
+    info!(
+        "Unwrapping relayed uplink, uplink_id: {}, relay_packet: {}",
+        pl.rx_info.as_ref().map(|v| v.uplink_id).unwrap_or_default(),
+        packet
+    );
 
     let mut pl = pl.clone();
 
@@ -138,7 +152,6 @@ async fn relay_relay_packet(_: &gw::UplinkFrame, mut packet: RelayPacket) -> Res
             if pl.relay_id == relay_id {
                 // We must unwrap the Relay encapsulated packet and send it to the
                 // End Device.
-                trace!("Forwarding downlink to end-device");
 
                 let pl = gw::DownlinkFrame {
                     downlink_id: random(),
@@ -167,6 +180,10 @@ async fn relay_relay_packet(_: &gw::UplinkFrame, mut packet: RelayPacket) -> Res
                     ..Default::default()
                 };
 
+                info!(
+                    "Unwrapping relayed uplink, downlink_id: {}, relay_packet: {}",
+                    pl.downlink_id, packet
+                );
                 return helpers::tx_ack_to_err(&backend::send_downlink(&pl).await?);
             }
         }
@@ -205,6 +222,10 @@ async fn relay_relay_packet(_: &gw::UplinkFrame, mut packet: RelayPacket) -> Res
         ..Default::default()
     };
 
+    info!(
+        "Re-relaying relayed frame, downlink_id: {}, relay_packet: {}",
+        pl.downlink_id, packet
+    );
     backend::relay(&pl).await
 }
 
@@ -264,6 +285,11 @@ async fn relay_uplink_lora_packet(pl: &gw::UplinkFrame) -> Result<()> {
         }],
         ..Default::default()
     };
+
+    info!(
+        "Relaying uplink LoRa frame, uplink_id: {}, downlink_id: {}, relay_packet: {}",
+        rx_info.uplink_id, pl.downlink_id, packet,
+    );
 
     backend::relay(&pl).await
 }
@@ -356,6 +382,11 @@ async fn relay_downlink_lora_packet(pl: &gw::DownlinkFrame) -> Result<gw::Downli
             }],
             ..Default::default()
         };
+
+        info!(
+            "Sending downlink frame as relayed downlink, downlink_id: {}, relay_packet: {}",
+            pl.downlink_id, packet
+        );
 
         match backend::relay(&pl).await {
             Ok(_) => {
