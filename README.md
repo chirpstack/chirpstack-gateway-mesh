@@ -1,5 +1,7 @@
 # ChirpStack Gateway Relay
 
+**This project is work in progress!**
+
 ChirpStack Gateway Relay is a software component that can turn a LoRa<sup>&reg;</sup>
 gateway into a relay. This makes it possible to extend the LoRa coverage, without
 the need to connect each LoRa gateway to the internet.
