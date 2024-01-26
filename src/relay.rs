@@ -181,7 +181,7 @@ async fn relay_relay_packet(_: &gw::UplinkFrame, mut packet: RelayPacket) -> Res
                 };
 
                 info!(
-                    "Unwrapping relayed uplink, downlink_id: {}, relay_packet: {}",
+                    "Unwrapping relayed downlink, downlink_id: {}, relay_packet: {}",
                     pl.downlink_id, packet
                 );
                 return helpers::tx_ack_to_err(&backend::send_downlink(&pl).await?);
