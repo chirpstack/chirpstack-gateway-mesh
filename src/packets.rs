@@ -15,7 +15,7 @@ impl Packet {
         }
 
         // Check for proprietary "111" bits prefix.
-        if b[0] & 0xe0 != 0 {
+        if b[0] & 0xe0 == 0xe0 {
             Ok(Packet::Relay(RelayPacket::from_slice(b)?))
         } else {
             Ok(Packet::Lora(b.to_vec()))

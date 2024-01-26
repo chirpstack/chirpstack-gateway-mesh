@@ -242,7 +242,7 @@ async fn handle_event_msg(
                 }
 
                 // Filter out proprietary payloads.
-                if pl.phy_payload.first().cloned().unwrap_or_default() & 0xe0 != 0 {
+                if pl.phy_payload.first().cloned().unwrap_or_default() & 0xe0 == 0xe0 {
                     debug!(
                         "Discarding proprietary uplink, uplink_id: {}",
                         rx_info.uplink_id
@@ -302,7 +302,7 @@ async fn handle_relay_event_msg(border_gateway: bool, event: &[u8], pl: &[u8]) -
             }
 
             // The relay event msg must always be a proprietary payload.
-            if pl.phy_payload.first().cloned().unwrap_or_default() & 0xe0 != 0 {
+            if pl.phy_payload.first().cloned().unwrap_or_default() & 0xe0 == 0xe0 {
                 info!("Relay frame received - {}", helpers::format_uplink(&pl)?);
                 relay::handle_relay(border_gateway, pl).await?;
             }
