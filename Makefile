@@ -84,13 +84,16 @@ package-armv7-unknown-linux-musleabihf:
 	cp target/armv7-unknown-linux-musleabihf/debian/*.deb ./dist
 
 package-armv5te-unknown-linux-musleabi:
-	# TODO
+	$(eval PKG_VERSION := $(shell cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version'))
+	mkdir -p dist
 
 package-mips-unknown-linux-musl:
-	# TODO
+	$(eval PKG_VERSION := $(shell cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version'))
+	mkdir -p dist
 
 package-mipsel-unknown-linux-musl:
-	# TODO
+	$(eval PKG_VERSION := $(shell cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version'))
+	mkdir -p dist
 
 # Update the version.
 version:
