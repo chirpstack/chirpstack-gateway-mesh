@@ -65,22 +65,22 @@ package-aarch64-unknown-linux-musl:
 	mkdir -p dist
 
 	# .tar.gz
-	tar -czvf dist/chirpstack-mqtt-forwarder_$(PKG_VERSION)_arm64.tar.gz -C target/aarch64-unknown-linux-musl/release chirpstack-mqtt-forwarder
+	tar -czvf dist/chirpstack-gateway-relay_$(PKG_VERSION)_arm64.tar.gz -C target/aarch64-unknown-linux-musl/release chirpstack-gateway-relay
 
 	# .deb
 	cargo deb --target aarch64-unknown-linux-musl --no-build --no-strip
 	cp target/aarch64-unknown-linux-musl/debian/*.deb ./dist
 
 
-package-armv7-unknown-linux-musleabihf: package-tektelic-kona package-kerlink-klkgw package-multitech-conduit-ap3
+package-armv7-unknown-linux-musleabihf:
 	$(eval PKG_VERSION := $(shell cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version'))
 	mkdir -p dist
 
 	# .tar.gz
-	tar -czvf dist/chirpstack-mqtt-forwarder_$(PKG_VERSION)_armv7hf.tar.gz -C target/armv7-unknown-linux-musleabihf/release chirpstack-mqtt-forwarder
+	tar -czvf dist/chirpstack-gateway-relay_$(PKG_VERSION)_armv7hf.tar.gz -C target/armv7-unknown-linux-musleabihf/release chirpstack-gateway-relay
 
 	# .deb
-	cargo deb --target armv7-unknown-linux-mupackage-mipsel-unknown-linux-musl:sleabihf --no-build --no-strip
+	cargo deb --target armv7-unknown-linux-musleabihf --no-build --no-strip
 	cp target/armv7-unknown-linux-musleabihf/debian/*.deb ./dist
 
 package-armv5te-unknown-linux-musleabi:
