@@ -54,6 +54,7 @@ pub struct Relay {
     pub proxy_api: ProxyApi,
     pub filters: Filters,
     pub border_gateway: bool,
+    pub border_gateway_ignore_direct_uplinks: bool,
     pub max_hop_count: u8,
 }
 
@@ -72,6 +73,7 @@ impl Default for Relay {
             proxy_api: ProxyApi::default(),
             filters: Filters::default(),
             border_gateway: false,
+            border_gateway_ignore_direct_uplinks: false,
             max_hop_count: 0,
         }
     }

@@ -33,6 +33,14 @@ pub fn run() {
   # uplinks and forward these to the proxy API, rather than relaying these.
   border_gateway={{ relay.border_gateway }}
 
+  # Ignore direct uplinks (Border Gateway).
+  #
+  # If this is set to true, then direct uplinks (uplinks that are not relay
+  # encapsulated) will be silently ignored. This option is especially useful
+  # for testing, in which case you want to set this to true for the Border
+  # Gateway.
+  border_gateway_ignore_direct_uplinks={{ relay.border_gateway_ignore_direct_uplinks }}
+
   # Relay frequencies.
   #
   # The ChirpStack Gateway Relay will randomly use one of the configured

@@ -48,14 +48,20 @@ async fn setup_concentratord(conf: &Configuration) -> Result<()> {
 
     tokio::spawn({
         let border_gateway = conf.relay.border_gateway;
+        let border_gateway_ignore_direct_uplinks = conf.relay.border_gateway_ignore_direct_uplinks;
         let filters = lrwn_filters::Filters {
             dev_addr_prefixes: conf.relay.filters.dev_addr_prefixes.clone(),
             join_eui_prefixes: conf.relay.filters.join_eui_prefixes.clone(),
         };
 
         async move {
-            event_loop(border_gateway, event_sock, filters).await;
-            println!("BOOM");
+            event_loop(
+                border_gateway,
+                border_gateway_ignore_direct_uplinks,
+                event_sock,
+                filters,
+            )
+            .await;
         }
     });
 
@@ -156,6 +162,7 @@ impl Backend {
 
 async fn event_loop(
     border_gateway: bool,
+    border_gateway_ignore_direct_uplinks: bool,
     mut event_sock: zeromq::SubSocket,
     filters: lrwn_filters::Filters,
 ) {
@@ -174,6 +181,7 @@ async fn event_loop(
 
         if let Err(e) = handle_event_msg(
             border_gateway,
+            border_gateway_ignore_direct_uplinks,
             &resp.get(0).map(|v| v.to_vec()).unwrap_or_default(),
             &resp.get(1).map(|v| v.to_vec()).unwrap_or_default(),
             &filters,
@@ -215,6 +223,7 @@ async fn relay_event_loop(border_gateway: bool, mut event_sock: zeromq::SubSocke
 
 async fn handle_event_msg(
     border_gateway: bool,
+    border_gateway_ignore_direct_uplinks: bool,
     event: &[u8],
     pl: &[u8],
     filters: &lrwn_filters::Filters,
@@ -247,6 +256,12 @@ async fn handle_event_msg(
                         "Discarding proprietary uplink, uplink_id: {}",
                         rx_info.uplink_id
                     );
+                    return Ok(());
+                }
+
+                // Ignore direct uplinks.
+                if border_gateway_ignore_direct_uplinks {
+                    debug!("Discarding direct uplink because of border_gateway_ignore_direct_uplinks setting, uplink_id: {}", rx_info.uplink_id);
                     return Ok(());
                 }
 
