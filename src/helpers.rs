@@ -201,7 +201,7 @@ pub fn format_uplink(pl: &gw::UplinkFrame) -> Result<String> {
         tx_info.frequency,
         rx_info.rssi,
         rx_info.snr,
-        format_modulation(&modulation)
+        format_modulation(modulation)
     ))
 }
 
@@ -228,8 +228,8 @@ pub fn format_downlink(pl: &gw::DownlinkFrame) -> Result<String> {
             "[freq: {}, power: {}, mod: {}, timing: {}]",
             tx_info.frequency,
             tx_info.power,
-            format_modulation(&modulation),
-            format_timing(&timing),
+            format_modulation(modulation),
+            format_timing(timing),
         ));
     }
 
