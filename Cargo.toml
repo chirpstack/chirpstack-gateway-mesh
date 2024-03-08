@@ -65,6 +65,7 @@
   conf-files = [
     "/etc/chirpstack-gateway-relay/chirpstack-gateway-relay.toml",
     "/etc/chirpstack-gateway-relay/region_eu868.toml",
+    "/etc/chirpstack-gateway-relay/region_us915.toml",
   ]
   maintainer-scripts = "packaging/debian/"
   systemd-units = { enable = true }
