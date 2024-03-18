@@ -1,11 +1,11 @@
 use std::time::Duration;
 
 use once_cell::sync::OnceCell;
+use tokio::fs::remove_file;
 use tokio::sync::Mutex;
 use tokio::time::sleep;
 use zeromq::{Socket, SocketRecv, SocketSend};
 
-use chirpstack_gateway_relay::cleanup_socket_file;
 use chirpstack_gateway_relay::config::{self, Configuration};
 
 pub static FORWARDER_EVENT_SOCK: OnceCell<Mutex<zeromq::SubSocket>> = OnceCell::new();
@@ -190,4 +190,17 @@ async fn init_relay() {
     });
 
     sleep(Duration::from_millis(100)).await;
+}
+
+pub async fn cleanup_socket_file(path: &str) {
+    let ep = match path.parse::<zeromq::Endpoint>() {
+        Ok(v) => v,
+        Err(_) => {
+            return;
+        }
+    };
+
+    if let zeromq::Endpoint::Ipc(Some(path)) = ep {
+        let _ = remove_file(path).await;
+    }
 }
