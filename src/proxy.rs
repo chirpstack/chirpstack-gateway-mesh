@@ -130,11 +130,18 @@ async fn command_loop(mut command_rx: CommandChannel) {
     trace!("Starting command loop");
 
     while let Some(cmd) = command_rx.recv().await {
-        if let Err(e) = handle_command(&cmd).await {
-            error!("Handle command error: {}", e);
-            let _ = cmd.1.send(vec![]);
+        match handle_command(&cmd).await {
+            Ok(v) => {
+                _ = cmd.1.send(v);
+            }
+            Err(e) => {
+                error!("Handle command error: {}", e);
+                let _ = cmd.1.send(vec![]);
+            }
         }
     }
+
+    error!("Command loop has been interrupted");
 }
 
 async fn handle_command(cmd: &Command) -> Result<Vec<u8>> {
