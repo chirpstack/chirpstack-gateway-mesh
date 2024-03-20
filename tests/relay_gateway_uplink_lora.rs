@@ -79,7 +79,7 @@ async fn test_relay_gateway_uplink_lora() {
         packets::RelayPacket {
             mhdr: packets::MHDR {
                 payload_type: packets::PayloadType::Uplink,
-                hop_count: 0
+                hop_count: 1,
             },
             payload: packets::Payload::Uplink(packets::UplinkPayload {
                 metadata: packets::UplinkMetadata {

@@ -101,10 +101,9 @@ async fn proxy_uplink_relay_packet(pl: &gw::UplinkFrame, packet: RelayPacket) ->
         rx_info.gateway_id = hex::encode(backend::get_gateway_id().await?);
 
         // Set metadata.
-        rx_info.metadata.insert(
-            "hop_count".to_string(),
-            (packet.mhdr.hop_count + 1).to_string(),
-        );
+        rx_info
+            .metadata
+            .insert("hop_count".to_string(), (packet.mhdr.hop_count).to_string());
         rx_info
             .metadata
             .insert("relay_id".to_string(), hex::encode(relay_pl.relay_id));
@@ -248,7 +247,7 @@ async fn relay_uplink_lora_packet(pl: &gw::UplinkFrame) -> Result<()> {
     let packet = RelayPacket {
         mhdr: MHDR {
             payload_type: PayloadType::Uplink,
-            hop_count: 0,
+            hop_count: 1,
         },
         payload: Payload::Uplink(UplinkPayload {
             metadata: UplinkMetadata {
@@ -337,7 +336,7 @@ async fn relay_downlink_lora_packet(pl: &gw::DownlinkFrame) -> Result<gw::Downli
         let packet = packets::RelayPacket {
             mhdr: packets::MHDR {
                 payload_type: packets::PayloadType::Downlink,
-                hop_count: 0,
+                hop_count: 1,
             },
             payload: packets::Payload::Downlink(packets::DownlinkPayload {
                 phy_payload: downlink_item.phy_payload.clone(),

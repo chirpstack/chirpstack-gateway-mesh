@@ -23,11 +23,11 @@ async fn test_relay_gateway_downlink_lora() {
     let down_packet = packets::RelayPacket {
         mhdr: packets::MHDR {
             payload_type: packets::PayloadType::Downlink,
-            hop_count: 0,
+            hop_count: 1,
         },
         payload: packets::Payload::Downlink(packets::DownlinkPayload {
             metadata: packets::DownlinkMetadata {
-                uplink_id: uplink_id,
+                uplink_id,
                 dr: 0,
                 frequency: 867100000,
                 tx_power: 1,

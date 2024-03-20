@@ -89,7 +89,7 @@ impl fmt::Display for RelayPacket {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct MHDR {
     pub payload_type: PayloadType,
-    pub hop_count: u8,
+    pub hop_count: u8, // 000 = 1, ... 111 = 8
 }
 
 impl MHDR {
@@ -100,16 +100,20 @@ impl MHDR {
 
         Ok(MHDR {
             payload_type: PayloadType::from_byte((b >> 3) & 0x03)?,
-            hop_count: b & 0x07,
+            hop_count: (b & 0x07) + 1,
         })
     }
 
     pub fn to_byte(&self) -> Result<u8> {
-        if self.hop_count > 7 {
-            return Err(anyhow!("Max hop_count is 7"));
+        if self.hop_count == 0 {
+            return Err(anyhow!("Min hop_count is 1"));
         }
 
-        Ok(0x07 << 5 | self.payload_type.to_byte() << 3 | self.hop_count)
+        if self.hop_count > 8 {
+            return Err(anyhow!("Max hop_count is 8"));
+        }
+
+        Ok(0x07 << 5 | self.payload_type.to_byte() << 3 | (self.hop_count - 1))
     }
 }
 
@@ -385,7 +389,7 @@ mod test {
         let tests = vec![
             Test {
                 name: "uplink + hop count 3".to_string(),
-                byte: 0xe3,
+                byte: 0xe2,
                 expected_mhdr: Some(MHDR {
                     payload_type: PayloadType::Uplink,
                     hop_count: 3,
@@ -393,11 +397,11 @@ mod test {
                 expected_error: None,
             },
             Test {
-                name: "downlink + hop count 7".to_string(),
+                name: "downlink + hop count 8".to_string(),
                 byte: 0xef,
                 expected_mhdr: Some(MHDR {
                     payload_type: PayloadType::Downlink,
-                    hop_count: 7,
+                    hop_count: 8,
                 }),
                 expected_error: None,
             },
@@ -437,14 +441,14 @@ mod test {
                     payload_type: PayloadType::Uplink,
                     hop_count: 3,
                 },
-                expected_byte: Some(0xe3),
+                expected_byte: Some(0xe2),
                 expected_error: None,
             },
             Test {
-                name: "downlink + hop count 7".to_string(),
+                name: "downlink + hop count 8".to_string(),
                 mhdr: MHDR {
                     payload_type: PayloadType::Downlink,
-                    hop_count: 7,
+                    hop_count: 8,
                 },
                 expected_byte: Some(0xef),
                 expected_error: None,
@@ -453,10 +457,19 @@ mod test {
                 name: "hop count exceeds max value".to_string(),
                 mhdr: MHDR {
                     payload_type: PayloadType::Uplink,
-                    hop_count: 8,
+                    hop_count: 9,
                 },
                 expected_byte: None,
-                expected_error: Some("Max hop_count is 7".into()),
+                expected_error: Some("Max hop_count is 8".into()),
+            },
+            Test {
+                name: "hop count is 0".to_string(),
+                mhdr: MHDR {
+                    payload_type: PayloadType::Uplink,
+                    hop_count: 0,
+                },
+                expected_byte: None,
+                expected_error: Some("Min hop_count is 1".into()),
             },
         ];
 
@@ -825,7 +838,7 @@ mod test {
             Test {
                 name: "uplink".into(),
                 bytes: vec![
-                    0xe3, 0x40, 0x03, 0x78, 0x34, 0x40, 0x01, 0x02, 0x03, 0x04, 0x05,
+                    0xe2, 0x40, 0x03, 0x78, 0x34, 0x40, 0x01, 0x02, 0x03, 0x04, 0x05,
                 ],
                 expected_relay_packet: RelayPacket {
                     mhdr: MHDR {
@@ -853,7 +866,7 @@ mod test {
                 expected_relay_packet: RelayPacket {
                     mhdr: MHDR {
                         payload_type: PayloadType::Downlink,
-                        hop_count: 7,
+                        hop_count: 8,
                     },
                     payload: Payload::Downlink(DownlinkPayload {
                         metadata: DownlinkMetadata {
@@ -889,7 +902,7 @@ mod test {
             Test {
                 name: "uplink".into(),
                 expected_bytes: vec![
-                    0xe3, 0x40, 0x03, 0x78, 0x34, 0x40, 0x01, 0x02, 0x03, 0x04, 0x05,
+                    0xe2, 0x40, 0x03, 0x78, 0x34, 0x40, 0x01, 0x02, 0x03, 0x04, 0x05,
                 ],
                 relay_packet: RelayPacket {
                     mhdr: MHDR {
@@ -917,7 +930,7 @@ mod test {
                 relay_packet: RelayPacket {
                     mhdr: MHDR {
                         payload_type: PayloadType::Downlink,
-                        hop_count: 7,
+                        hop_count: 8,
                     },
                     payload: Payload::Downlink(DownlinkPayload {
                         metadata: DownlinkMetadata {
@@ -953,7 +966,7 @@ mod test {
             Test {
                 name: "relay packet".into(),
                 bytes: vec![
-                    0xe3, 0x40, 0x03, 0x78, 0x34, 0x40, 0x01, 0x02, 0x03, 0x04, 0x05,
+                    0xe2, 0x40, 0x03, 0x78, 0x34, 0x40, 0x01, 0x02, 0x03, 0x04, 0x05,
                 ],
                 expected_packet: Packet::Relay(RelayPacket {
                     mhdr: MHDR {
@@ -999,7 +1012,7 @@ mod test {
             Test {
                 name: "relay packet".into(),
                 expected_bytes: vec![
-                    0xe3, 0x40, 0x03, 0x78, 0x34, 0x40, 0x01, 0x02, 0x03, 0x04, 0x05,
+                    0xe2, 0x40, 0x03, 0x78, 0x34, 0x40, 0x01, 0x02, 0x03, 0x04, 0x05,
                 ],
                 packet: Packet::Relay(RelayPacket {
                     mhdr: MHDR {

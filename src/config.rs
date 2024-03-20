@@ -74,7 +74,7 @@ impl Default for Relay {
             filters: Filters::default(),
             border_gateway: false,
             border_gateway_ignore_direct_uplinks: false,
-            max_hop_count: 0,
+            max_hop_count: 1,
         }
     }
 }

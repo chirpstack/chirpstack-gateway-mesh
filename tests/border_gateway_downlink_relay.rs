@@ -88,7 +88,7 @@ async fn test_border_gateway_downlink_relay() {
         packets::RelayPacket {
             mhdr: packets::MHDR {
                 payload_type: packets::PayloadType::Downlink,
-                hop_count: 0,
+                hop_count: 1,
             },
             payload: packets::Payload::Downlink(packets::DownlinkPayload {
                 metadata: packets::DownlinkMetadata {
