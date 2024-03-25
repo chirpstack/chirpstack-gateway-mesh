@@ -17,7 +17,7 @@
     "derive",
   ] }
   chirpstack_api = { version = "4.7", default-features = false }
-  lrwn_filters = { version = "4.6", features = ["serde"] }
+  lrwn_filters = { version = "4.7", features = ["serde"] }
   log = "0.4"
   simple_logger = "4.2"
   syslog = "6.1"
