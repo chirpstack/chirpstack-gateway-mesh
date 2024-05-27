@@ -9,6 +9,7 @@ use rand::random;
 
 use crate::{
     backend,
+    cache::{Cache, PayloadCache},
     config::{self, Configuration},
     helpers,
     packets::{
@@ -23,6 +24,7 @@ static RELAY_CHANNEL: Mutex<usize> = Mutex::new(0);
 static UPLINK_ID: Mutex<u16> = Mutex::new(0);
 static UPLINK_CONTEXT: Lazy<Mutex<HashMap<u16, Vec<u8>>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
+static PAYLOAD_CACHE: Lazy<Mutex<Cache<PayloadCache>>> = Lazy::new(|| Mutex::new(Cache::new(64)));
 
 // Handle LoRaWAN payload (non-proprietary).
 pub async fn handle_uplink(border_gateway: bool, pl: gw::UplinkFrame) -> Result<()> {
@@ -35,6 +37,12 @@ pub async fn handle_uplink(border_gateway: bool, pl: gw::UplinkFrame) -> Result<
 // Handle Proprietary LoRaWAN payload (relay encapsulated).
 pub async fn handle_relay(border_gateway: bool, pl: gw::UplinkFrame) -> Result<()> {
     let packet = RelayPacket::from_slice(&pl.phy_payload)?;
+
+    // If we can't add the packet to the cache, it means we have already seen the packet and we can
+    // drop it.
+    if !PAYLOAD_CACHE.lock().unwrap().add((&packet).into()) {
+        return Ok(());
+    };
 
     match border_gateway {
         // In this case we only care about proxy-ing relayed uplinks

@@ -42,6 +42,7 @@ pub fn get_config(border_gateway: bool) -> Configuration {
                 event_bind: "ipc:///tmp/gateway_relay_event".into(),
                 command_bind: "ipc:///tmp/gateway_relay_command".into(),
             },
+            max_hop_count: 3,
             ..Default::default()
         },
         backend: config::Backend {

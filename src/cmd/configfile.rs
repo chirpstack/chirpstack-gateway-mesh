@@ -33,6 +33,11 @@ pub fn run() {
   # uplinks and forward these to the proxy API, rather than relaying these.
   border_gateway={{ relay.border_gateway }}
 
+  # Max hop count.
+  #
+  # This defines the maximum number of hops a relayed payload will pass.
+  max_hop_count={{ relay.max_hop_count }}
+
   # Ignore direct uplinks (Border Gateway).
   #
   # If this is set to true, then direct uplinks (uplinks that are not relay

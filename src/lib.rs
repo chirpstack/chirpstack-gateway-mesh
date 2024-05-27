@@ -2,6 +2,7 @@
 extern crate anyhow;
 
 pub mod backend;
+pub mod cache;
 pub mod cmd;
 pub mod config;
 pub mod helpers;

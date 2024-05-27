@@ -72,7 +72,7 @@ async fn test_relay_gateway_uplink_lora() {
         gw::DownlinkFrame::decode(msg.get(1).cloned().unwrap()).unwrap()
     };
 
-    let down_item = down.items.get(0).unwrap();
+    let down_item = down.items.first().unwrap();
     let relay_packet = packets::RelayPacket::from_slice(&down_item.phy_payload).unwrap();
 
     assert_eq!(

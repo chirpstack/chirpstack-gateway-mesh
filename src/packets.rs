@@ -117,7 +117,7 @@ impl MHDR {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum PayloadType {
     Uplink,
     Downlink,
