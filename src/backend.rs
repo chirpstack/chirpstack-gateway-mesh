@@ -411,23 +411,21 @@ pub async fn send_gateway_configuration(pl: &gw::GatewayConfiguration) -> Result
 pub async fn get_relay_id() -> Result<[u8; 4]> {
     trace!("Getting relay ID");
 
-    Ok(RELAY_ID
+    Ok(*RELAY_ID
         .get()
         .ok_or_else(|| anyhow!("RELAY_ID is not set"))?
         .lock()
-        .await
-        .clone())
+        .await)
 }
 
 pub async fn get_gateway_id() -> Result<[u8; 8]> {
     trace!("Getting gateway ID");
 
-    Ok(GATEWAY_ID
+    Ok(*GATEWAY_ID
         .get()
         .ok_or_else(|| anyhow!("GATEWAY_ID is not set"))?
         .lock()
-        .await
-        .clone())
+        .await)
 }
 
 fn send_zmq_command(sock: &mut zmq::Socket, cmd: &Command) -> Result<Vec<u8>> {

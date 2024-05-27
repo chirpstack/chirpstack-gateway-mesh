@@ -129,7 +129,7 @@ async fn proxy_uplink_relay_packet(pl: &gw::UplinkFrame, packet: RelayPacket) ->
     }
 
     // Set original PHYPayload.
-    pl.phy_payload = relay_pl.phy_payload.clone();
+    pl.phy_payload.clone_from(&relay_pl.phy_payload);
 
     proxy::send_uplink(&pl).await
 }
