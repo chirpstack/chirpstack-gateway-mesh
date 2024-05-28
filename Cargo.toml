@@ -16,16 +16,16 @@
     "usage",
     "derive",
   ] }
-  chirpstack_api = { version = "4.7", default-features = false }
-  lrwn_filters = { version = "4.6", features = ["serde"] }
+  chirpstack_api = { version = "4.8", default-features = false }
+  lrwn_filters = { version = "4.7", features = ["serde"] }
   log = "0.4"
-  simple_logger = "4.2"
+  simple_logger = "5.0"
   syslog = "6.1"
   toml = "0.8"
   handlebars = "5.1"
   anyhow = "1.0"
   serde = { version = "1.0", features = ["derive"] }
-  tokio = { version = "1.35", features = [
+  tokio = { version = "1.37", features = [
     "macros",
     "rt-multi-thread",
     "time",
@@ -43,7 +43,7 @@
 
 [dev-dependencies]
   zeromq = "0.3.5"
-  bytes = "1.5"
+  bytes = "1.6"
 
 [profile.release]
   strip = true
