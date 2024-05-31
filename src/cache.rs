@@ -40,8 +40,8 @@ pub struct PayloadCache {
     relay_id: [u8; 4],
 }
 
-impl From<&packets::RelayPacket> for PayloadCache {
-    fn from(p: &packets::RelayPacket) -> PayloadCache {
+impl From<&packets::MeshPacket> for PayloadCache {
+    fn from(p: &packets::MeshPacket) -> PayloadCache {
         let p_type = p.mhdr.payload_type;
 
         match &p.payload {

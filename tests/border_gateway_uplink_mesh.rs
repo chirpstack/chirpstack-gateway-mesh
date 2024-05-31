@@ -5,20 +5,20 @@ use chirpstack_api::gw;
 use chirpstack_api::prost::Message;
 use zeromq::{SocketRecv, SocketSend};
 
-use chirpstack_gateway_relay::packets;
+use chirpstack_gateway_mesh::packets;
 
 mod common;
 
 /*
-    This tests the scenario when the Border Gateway receives a relay encapsulated
+    This tests the scenario when the Border Gateway receives a mesh encapsulated
     LoRaWAN uplink frame. The Border Gateway will unwrap the LoRaWAN frame before
     forwarding it to the Forwarder application.
 */
 #[tokio::test]
-async fn test_border_gateway_uplink_relay() {
+async fn test_border_gateway_uplink_mesh() {
     common::setup(true).await;
 
-    let packet = packets::RelayPacket {
+    let packet = packets::MeshPacket {
         mhdr: packets::MHDR {
             payload_type: packets::PayloadType::Uplink,
             hop_count: 1,
@@ -58,7 +58,7 @@ async fn test_border_gateway_uplink_relay() {
 
     // Publish uplink event.
     {
-        let mut event_sock = common::RELAY_BACKEND_EVENT_SOCK.get().unwrap().lock().await;
+        let mut event_sock = common::MESH_BACKEND_EVENT_SOCK.get().unwrap().lock().await;
         event_sock
             .send(
                 vec![

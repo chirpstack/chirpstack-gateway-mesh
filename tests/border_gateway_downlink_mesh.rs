@@ -5,16 +5,16 @@ use chirpstack_api::gw;
 use chirpstack_api::prost::Message;
 use zeromq::{SocketRecv, SocketSend};
 
-use chirpstack_gateway_relay::packets;
+use chirpstack_gateway_mesh::packets;
 
 mod common;
 
 /*
     This tests the scenario when the Border Gateway receives a downlink which must
-    be relay encapsulated and forwarded to the Relay Gateway.
+    be mesh encapsulated and forwarded to the Relay Gateway.
 */
 #[tokio::test]
-async fn test_border_gateway_downlink_relay() {
+async fn test_border_gateway_downlink_mesh() {
     common::setup(true).await;
 
     let down = gw::DownlinkFrame {
@@ -66,9 +66,9 @@ async fn test_border_gateway_downlink_relay() {
             .unwrap();
     }
 
-    // We expect the wrapped downlink to be received by the relay concentratord.
+    // We expect the wrapped downlink to be received by the mesh concentratord.
     let down: gw::DownlinkFrame = {
-        let mut cmd_sock = common::RELAY_BACKEND_COMMAND_SOCK
+        let mut cmd_sock = common::MESH_BACKEND_COMMAND_SOCK
             .get()
             .unwrap()
             .lock()
@@ -82,10 +82,10 @@ async fn test_border_gateway_downlink_relay() {
     };
 
     let down_item = down.items.get(0).unwrap();
-    let relay_packet = packets::RelayPacket::from_slice(&down_item.phy_payload).unwrap();
+    let mesh_packet = packets::MeshPacket::from_slice(&down_item.phy_payload).unwrap();
 
     assert_eq!(
-        packets::RelayPacket {
+        packets::MeshPacket {
             mhdr: packets::MHDR {
                 payload_type: packets::PayloadType::Downlink,
                 hop_count: 1,
@@ -102,7 +102,7 @@ async fn test_border_gateway_downlink_relay() {
                 phy_payload: vec![9, 8, 7, 6],
             })
         },
-        relay_packet
+        mesh_packet
     );
 
     assert_eq!(

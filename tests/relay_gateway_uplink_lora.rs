@@ -3,14 +3,14 @@ extern crate anyhow;
 
 use chirpstack_api::gw;
 use chirpstack_api::prost::Message;
-use chirpstack_gateway_relay::packets;
+use chirpstack_gateway_mesh::packets;
 use zeromq::{SocketRecv, SocketSend};
 
 mod common;
 
 /*
     This tests the scenario when the Relay Gateway receives an uplink LoRaWAN
-    frame. The Relay Gateway will then relay encapsulate this frame, before
+    frame. The Relay Gateway will then mesh encapsulate this frame, before
     it is forwarded to the Border Gateway.
 */
 #[tokio::test]
@@ -57,9 +57,9 @@ async fn test_relay_gateway_uplink_lora() {
     }
 
     // We expect uplink to be wrapped as 'downlink' and received by the
-    // relay concentratord.
+    // mesh concentratord.
     let down: gw::DownlinkFrame = {
-        let mut cmd_sock = common::RELAY_BACKEND_COMMAND_SOCK
+        let mut cmd_sock = common::MESH_BACKEND_COMMAND_SOCK
             .get()
             .unwrap()
             .lock()
@@ -73,10 +73,10 @@ async fn test_relay_gateway_uplink_lora() {
     };
 
     let down_item = down.items.first().unwrap();
-    let relay_packet = packets::RelayPacket::from_slice(&down_item.phy_payload).unwrap();
+    let mesh_packet = packets::MeshPacket::from_slice(&down_item.phy_payload).unwrap();
 
     assert_eq!(
-        packets::RelayPacket {
+        packets::MeshPacket {
             mhdr: packets::MHDR {
                 payload_type: packets::PayloadType::Uplink,
                 hop_count: 1,
@@ -93,7 +93,7 @@ async fn test_relay_gateway_uplink_lora() {
                 phy_payload: vec![1, 2, 3, 4, 5, 6, 7, 8],
             }),
         },
-        relay_packet
+        mesh_packet
     );
 
     assert_eq!(

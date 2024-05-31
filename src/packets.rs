@@ -4,7 +4,7 @@ use anyhow::Result;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Packet {
-    Relay(RelayPacket),
+    Mesh(MeshPacket),
     Lora(Vec<u8>),
 }
 
@@ -16,7 +16,7 @@ impl Packet {
 
         // Check for proprietary "111" bits prefix.
         if b[0] & 0xe0 == 0xe0 {
-            Ok(Packet::Relay(RelayPacket::from_slice(b)?))
+            Ok(Packet::Mesh(MeshPacket::from_slice(b)?))
         } else {
             Ok(Packet::Lora(b.to_vec()))
         }
@@ -24,19 +24,19 @@ impl Packet {
 
     pub fn to_vec(&self) -> Result<Vec<u8>> {
         match self {
-            Packet::Relay(v) => v.to_vec(),
+            Packet::Mesh(v) => v.to_vec(),
             Packet::Lora(v) => Ok(v.clone()),
         }
     }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct RelayPacket {
+pub struct MeshPacket {
     pub mhdr: MHDR,
     pub payload: Payload,
 }
 
-impl RelayPacket {
+impl MeshPacket {
     pub fn from_slice(b: &[u8]) -> Result<Self> {
         if b.is_empty() {
             return Err(anyhow!("Input is empty"));
@@ -44,7 +44,7 @@ impl RelayPacket {
 
         let mhdr = MHDR::from_byte(b[0])?;
 
-        Ok(RelayPacket {
+        Ok(MeshPacket {
             payload: match mhdr.payload_type {
                 PayloadType::Uplink => Payload::Uplink(UplinkPayload::from_slice(&b[1..])?),
                 PayloadType::Downlink => Payload::Downlink(DownlinkPayload::from_slice(&b[1..])?),
@@ -63,7 +63,7 @@ impl RelayPacket {
     }
 }
 
-impl fmt::Display for RelayPacket {
+impl fmt::Display for MeshPacket {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match &self.payload {
             Payload::Uplink(v) => write!(
@@ -827,11 +827,11 @@ mod test {
     }
 
     #[test]
-    fn test_relay_packet_from_slice() {
+    fn test_mesh_packet_from_slice() {
         struct Test {
             name: String,
             bytes: Vec<u8>,
-            expected_relay_packet: RelayPacket,
+            expected_mesh_packet: MeshPacket,
         }
 
         let tests = vec![
@@ -840,7 +840,7 @@ mod test {
                 bytes: vec![
                     0xe2, 0x40, 0x03, 0x78, 0x34, 0x40, 0x01, 0x02, 0x03, 0x04, 0x05,
                 ],
-                expected_relay_packet: RelayPacket {
+                expected_mesh_packet: MeshPacket {
                     mhdr: MHDR {
                         payload_type: PayloadType::Uplink,
                         hop_count: 3,
@@ -863,7 +863,7 @@ mod test {
                 bytes: vec![
                     0xef, 0x40, 0x03, 0x84, 0x76, 0x28, 0xff, 0x01, 0x02, 0x03, 0x04, 0x05,
                 ],
-                expected_relay_packet: RelayPacket {
+                expected_mesh_packet: MeshPacket {
                     mhdr: MHDR {
                         payload_type: PayloadType::Downlink,
                         hop_count: 8,
@@ -885,16 +885,16 @@ mod test {
 
         for tst in &tests {
             println!("> {}", tst.name);
-            let pl = RelayPacket::from_slice(&tst.bytes).unwrap();
-            assert_eq!(tst.expected_relay_packet, pl);
+            let pl = MeshPacket::from_slice(&tst.bytes).unwrap();
+            assert_eq!(tst.expected_mesh_packet, pl);
         }
     }
 
     #[test]
-    fn test_relay_packet_to_vec() {
+    fn test_mesh_packet_to_vec() {
         struct Test {
             name: String,
-            relay_packet: RelayPacket,
+            mesh_packet: MeshPacket,
             expected_bytes: Vec<u8>,
         }
 
@@ -904,7 +904,7 @@ mod test {
                 expected_bytes: vec![
                     0xe2, 0x40, 0x03, 0x78, 0x34, 0x40, 0x01, 0x02, 0x03, 0x04, 0x05,
                 ],
-                relay_packet: RelayPacket {
+                mesh_packet: MeshPacket {
                     mhdr: MHDR {
                         payload_type: PayloadType::Uplink,
                         hop_count: 3,
@@ -927,7 +927,7 @@ mod test {
                 expected_bytes: vec![
                     0xef, 0x40, 0x03, 0x84, 0x76, 0x28, 0xff, 0x01, 0x02, 0x03, 0x04, 0x05,
                 ],
-                relay_packet: RelayPacket {
+                mesh_packet: MeshPacket {
                     mhdr: MHDR {
                         payload_type: PayloadType::Downlink,
                         hop_count: 8,
@@ -949,7 +949,7 @@ mod test {
 
         for tst in &tests {
             println!("> {}", tst.name);
-            let b = tst.relay_packet.to_vec().unwrap();
+            let b = tst.mesh_packet.to_vec().unwrap();
             assert_eq!(tst.expected_bytes, b);
         }
     }
@@ -964,11 +964,11 @@ mod test {
 
         let tests = vec![
             Test {
-                name: "relay packet".into(),
+                name: "mesh packet".into(),
                 bytes: vec![
                     0xe2, 0x40, 0x03, 0x78, 0x34, 0x40, 0x01, 0x02, 0x03, 0x04, 0x05,
                 ],
-                expected_packet: Packet::Relay(RelayPacket {
+                expected_packet: Packet::Mesh(MeshPacket {
                     mhdr: MHDR {
                         payload_type: PayloadType::Uplink,
                         hop_count: 3,
@@ -1010,11 +1010,11 @@ mod test {
 
         let tests = vec![
             Test {
-                name: "relay packet".into(),
+                name: "mesh packet".into(),
                 expected_bytes: vec![
                     0xe2, 0x40, 0x03, 0x78, 0x34, 0x40, 0x01, 0x02, 0x03, 0x04, 0x05,
                 ],
-                packet: Packet::Relay(RelayPacket {
+                packet: Packet::Mesh(MeshPacket {
                     mhdr: MHDR {
                         payload_type: PayloadType::Uplink,
                         hop_count: 3,

@@ -19,19 +19,32 @@
   log_to_syslog=false
 
 
-# Relay configuration.
-[relay]
+# Mesh configuration.
+[mesh]
 
   # Border Gateway.
   #
-  # If this is set to true, then the ChirpStack Gateway Relay will consider
+  # If this is set to true, then the ChirpStack Gateway Mesh will consider
   # this gateway as a Border Gateway, meaning that it will unwrap relayed
   # uplinks and forward these to the proxy API, rather than relaying these.
   border_gateway=false
 
-  # Relay frequencies.
+  # Max hop count.
   #
-  # The ChirpStack Gateway Relay will randomly use one of the configured
+  # This defines the maximum number of hops a relayed payload will pass.
+  max_hop_count=1
+
+  # Ignore direct uplinks (Border Gateway).
+  #
+  # If this is set to true, then direct uplinks (uplinks that are not relay
+  # encapsulated) will be silently ignored. This option is especially useful
+  # for testing, in which case you want to set this to true for the Border
+  # Gateway.
+  border_gateway_ignore_direct_uplinks=false
+
+  # Mesh frequencies.
+  #
+  # The ChirpStack Gateway Mesh will randomly use one of the configured
   # frequencies when relaying uplink and downlink messages.
   frequencies=[
     868100000,
@@ -47,7 +60,7 @@
   # Data-rate properties.
   #
   # The data-rate properties when relaying uplink and downlink messages.
-  [relay.data_rate]
+  [mesh.data_rate]
   
     # Modulation.
     #
@@ -69,7 +82,7 @@
 
   # Proxy API configuration.
   #
-  # If the Gateway Relay is configured to operate as Border Gateway. It
+  # If the gateway is configured to operate as Border Gateway. It
   # will unwrap relayed uplink frames, and will wrap downlink payloads that
   # must be relayed. In this case the ChirpStack MQTT Forwarder must be
   # configured to use the proxy API instead of the Concentratord API.
@@ -80,7 +93,7 @@
   #
   # This configuration is only used when the border_gateway option is set
   # to true.
-  [relay.proxy_api]
+  [mesh.proxy_api]
 
     # Event PUB socket bind.
     event_bind="ipc:///tmp/gateway_relay_event"
@@ -92,7 +105,7 @@
 # Backend configuration.
 [backend]
 
-  # ChirpStack Concentratord configuration (Relay <> End Device).
+  # ChirpStack Concentratord configuration (end-device communication).
   [backend.concentratord]
 
     # Event API URL.
@@ -102,12 +115,13 @@
     command_url="ipc:///tmp/concentratord_command"
 
 
-  # ChirpStack Concentratord configuration (Relay <> Relay).
+  # ChirpStack Concentratord configuration (mesh communication).
   #
   # While not required, this configuration makes it possible to use a different
-  # Concentratord instance for the Relay <> Relay communication. E.g. this
-  # makes it possible to use ISM2400 for Relay <> Relay communication.
-  [backend.relay_concentratord]
+  # Concentratord instance for the mesh communication. E.g. this
+  # makes it possible to use ISM2400 for mesh communication and EU868 for
+  # communication with the end-devices.
+  [backend.mesh_concentratord]
 
     # Event API URL.
     event_url="ipc:///tmp/concentratord_event"

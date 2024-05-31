@@ -5,12 +5,12 @@ use chirpstack_api::gw;
 use chirpstack_api::prost::Message;
 use zeromq::{SocketRecv, SocketSend};
 
-use chirpstack_gateway_relay::{packets, relay};
+use chirpstack_gateway_mesh::{mesh, packets};
 
 mod common;
 
 /*
-    This tests the scenario when the Relay Gateway receives a relay encapsulated
+    This tests the scenario when the Relay Gateway receives a mesh encapsulated
     downlink LoRaWAN frame. The Relay Gateway will unwrap the LoRaWAN frame before
     sending the downlink to the device.
 */
@@ -18,9 +18,9 @@ mod common;
 async fn test_relay_gateway_downlink_lora() {
     common::setup(false).await;
 
-    let uplink_id = relay::store_uplink_context(&[5, 4, 3, 2, 1]);
+    let uplink_id = mesh::store_uplink_context(&[5, 4, 3, 2, 1]);
 
-    let down_packet = packets::RelayPacket {
+    let down_packet = packets::MeshPacket {
         mhdr: packets::MHDR {
             payload_type: packets::PayloadType::Downlink,
             hop_count: 1,
@@ -62,9 +62,9 @@ async fn test_relay_gateway_downlink_lora() {
     };
 
     // Publish uplink.
-    // (we simulate that we receive the relay encapsulated downlink)
+    // (we simulate that we receive the Mesh encapsulated downlink)
     {
-        let mut event_sock = common::RELAY_BACKEND_EVENT_SOCK.get().unwrap().lock().await;
+        let mut event_sock = common::MESH_BACKEND_EVENT_SOCK.get().unwrap().lock().await;
         event_sock
             .send(
                 vec![

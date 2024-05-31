@@ -12,7 +12,7 @@ static CONFIG: OnceCell<Mutex<Arc<Configuration>>> = OnceCell::new();
 #[serde(default)]
 pub struct Configuration {
     pub logging: Logging,
-    pub relay: Relay,
+    pub mesh: Mesh,
     pub backend: Backend,
     pub mappings: Mappings,
 }
@@ -47,7 +47,7 @@ impl Default for Logging {
 
 #[derive(Serialize, Deserialize)]
 #[serde(default)]
-pub struct Relay {
+pub struct Mesh {
     pub frequencies: Vec<u32>,
     pub data_rate: DataRate,
     pub tx_power: i32,
@@ -58,9 +58,9 @@ pub struct Relay {
     pub max_hop_count: u8,
 }
 
-impl Default for Relay {
+impl Default for Mesh {
     fn default() -> Self {
-        Relay {
+        Mesh {
             frequencies: vec![868100000, 868300000, 868500000],
             data_rate: DataRate {
                 modulation: Modulation::LORA,
@@ -83,7 +83,7 @@ impl Default for Relay {
 #[serde(default)]
 pub struct Backend {
     pub concentratord: Concentratord,
-    pub relay_concentratord: Concentratord,
+    pub mesh_concentratord: Concentratord,
 }
 
 #[derive(Serialize, Deserialize)]

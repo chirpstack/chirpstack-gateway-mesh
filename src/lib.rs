@@ -7,6 +7,6 @@ pub mod cmd;
 pub mod config;
 pub mod helpers;
 pub mod logging;
+pub mod mesh;
 pub mod packets;
 pub mod proxy;
-pub mod relay;

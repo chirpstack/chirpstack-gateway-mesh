@@ -10,7 +10,7 @@ use tokio::sync::{mpsc, oneshot};
 use crate::backend;
 use crate::config::Configuration;
 use crate::helpers;
-use crate::relay;
+use crate::mesh;
 
 static EVENT_CHAN: OnceCell<EventChannel> = OnceCell::new();
 
@@ -20,13 +20,13 @@ type EventChannel = mpsc::UnboundedSender<Event>;
 type CommandChannel = mpsc::UnboundedReceiver<Command>;
 
 pub async fn setup(conf: &Configuration) -> Result<()> {
-    if !conf.relay.border_gateway {
+    if !conf.mesh.border_gateway {
         return Ok(());
     }
 
     info!(
         "Setting up Concentratord proxy API, event_bind: {}, command_bind: {}",
-        conf.relay.proxy_api.event_bind, conf.relay.proxy_api.command_bind
+        conf.mesh.proxy_api.event_bind, conf.mesh.proxy_api.command_bind
     );
 
     // Setup ZMQ event.
@@ -36,7 +36,7 @@ pub async fn setup(conf: &Configuration) -> Result<()> {
 
     // Spawn the zmq event handler to a dedicated thread.
     thread::spawn({
-        let event_bind = conf.relay.proxy_api.event_bind.clone();
+        let event_bind = conf.mesh.proxy_api.event_bind.clone();
 
         move || {
             let zmq_ctx = zmq::Context::new();
@@ -62,7 +62,7 @@ pub async fn setup(conf: &Configuration) -> Result<()> {
 
     // Spawn the zmq command handler to a dedicated thread.
     thread::spawn({
-        let command_bind = conf.relay.proxy_api.command_bind.clone();
+        let command_bind = conf.mesh.proxy_api.command_bind.clone();
 
         move || {
             let zmq_ctx = zmq::Context::new();
@@ -158,9 +158,7 @@ async fn handle_command(cmd: &Command) -> Result<Vec<u8>> {
                 "Downlink command received - {}",
                 helpers::format_downlink(&pl)?
             );
-            relay::handle_downlink(pl)
-                .await
-                .map(|v| v.encode_to_vec())?
+            mesh::handle_downlink(pl).await.map(|v| v.encode_to_vec())?
         }
         "gateway_id" => {
             info!("Get gateway id command received");

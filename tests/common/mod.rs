@@ -6,7 +6,7 @@ use tokio::sync::Mutex;
 use tokio::time::sleep;
 use zeromq::{Socket, SocketRecv, SocketSend};
 
-use chirpstack_gateway_relay::config::{self, Configuration};
+use chirpstack_gateway_mesh::config::{self, Configuration};
 
 pub static FORWARDER_EVENT_SOCK: OnceCell<Mutex<zeromq::SubSocket>> = OnceCell::new();
 pub static FORWARDER_COMMAND_SOCK: OnceCell<Mutex<zeromq::ReqSocket>> = OnceCell::new();
@@ -14,20 +14,20 @@ pub static FORWARDER_COMMAND_SOCK: OnceCell<Mutex<zeromq::ReqSocket>> = OnceCell
 pub static BACKEND_EVENT_SOCK: OnceCell<Mutex<zeromq::PubSocket>> = OnceCell::new();
 pub static BACKEND_COMMAND_SOCK: OnceCell<Mutex<zeromq::RepSocket>> = OnceCell::new();
 
-pub static RELAY_BACKEND_EVENT_SOCK: OnceCell<Mutex<zeromq::PubSocket>> = OnceCell::new();
-pub static RELAY_BACKEND_COMMAND_SOCK: OnceCell<Mutex<zeromq::RepSocket>> = OnceCell::new();
+pub static MESH_BACKEND_EVENT_SOCK: OnceCell<Mutex<zeromq::PubSocket>> = OnceCell::new();
+pub static MESH_BACKEND_COMMAND_SOCK: OnceCell<Mutex<zeromq::RepSocket>> = OnceCell::new();
 
 pub async fn setup(border_gateway: bool) {
     let conf = get_config(border_gateway);
     let _ = config::set(conf);
     init_backend(border_gateway).await;
-    init_relay().await;
+    init_mesh().await;
     init_forwarder(border_gateway).await;
 }
 
 pub fn get_config(border_gateway: bool) -> Configuration {
     Configuration {
-        relay: config::Relay {
+        mesh: config::Mesh {
             border_gateway,
             frequencies: vec![868100000],
             data_rate: config::DataRate {
@@ -39,8 +39,8 @@ pub fn get_config(border_gateway: bool) -> Configuration {
             },
             tx_power: 16,
             proxy_api: config::ProxyApi {
-                event_bind: "ipc:///tmp/gateway_relay_event".into(),
-                command_bind: "ipc:///tmp/gateway_relay_command".into(),
+                event_bind: "ipc:///tmp/gateway_mesh_event".into(),
+                command_bind: "ipc:///tmp/gateway_mesh_command".into(),
             },
             max_hop_count: 3,
             ..Default::default()
@@ -50,9 +50,9 @@ pub fn get_config(border_gateway: bool) -> Configuration {
                 event_url: "ipc:///tmp/concentratord_event".into(),
                 command_url: "ipc:///tmp/concentratord_command".into(),
             },
-            relay_concentratord: config::Concentratord {
-                event_url: "ipc:///tmp/relay_concentratord_event".into(),
-                command_url: "ipc:///tmp/relay_concentratord_command".into(),
+            mesh_concentratord: config::Concentratord {
+                event_url: "ipc:///tmp/mesh_concentratord_event".into(),
+                command_url: "ipc:///tmp/mesh_concentratord_command".into(),
             },
         },
         mappings: config::Mappings {
@@ -79,7 +79,7 @@ async fn init_forwarder(border_gateway: bool) {
 
     let mut event_sock = zeromq::SubSocket::new();
     event_sock
-        .connect(&conf.relay.proxy_api.event_bind)
+        .connect(&conf.mesh.proxy_api.event_bind)
         .await
         .unwrap();
     event_sock.subscribe("").await.unwrap();
@@ -91,7 +91,7 @@ async fn init_forwarder(border_gateway: bool) {
 
     let mut cmd_sock = zeromq::ReqSocket::new();
     cmd_sock
-        .connect(&conf.relay.proxy_api.command_bind)
+        .connect(&conf.mesh.proxy_api.command_bind)
         .await
         .unwrap();
 
@@ -131,25 +131,25 @@ async fn init_backend(border_gateway: bool) {
         .unwrap();
 
     let mut event_sock = zeromq::PubSocket::new();
-    cleanup_socket_file(&conf.backend.relay_concentratord.event_url).await;
+    cleanup_socket_file(&conf.backend.mesh_concentratord.event_url).await;
     event_sock
-        .bind(&conf.backend.relay_concentratord.event_url)
+        .bind(&conf.backend.mesh_concentratord.event_url)
         .await
         .unwrap();
 
-    RELAY_BACKEND_EVENT_SOCK
+    MESH_BACKEND_EVENT_SOCK
         .set(Mutex::new(event_sock))
         .map_err(|_| anyhow!("OnceCell error"))
         .unwrap();
 
     let mut cmd_sock = zeromq::RepSocket::new();
-    cleanup_socket_file(&conf.backend.relay_concentratord.command_url).await;
+    cleanup_socket_file(&conf.backend.mesh_concentratord.command_url).await;
     cmd_sock
-        .bind(&conf.backend.relay_concentratord.command_url)
+        .bind(&conf.backend.mesh_concentratord.command_url)
         .await
         .unwrap();
 
-    RELAY_BACKEND_COMMAND_SOCK
+    MESH_BACKEND_COMMAND_SOCK
         .set(Mutex::new(cmd_sock))
         .map_err(|_| anyhow!("OnceCell error"))
         .unwrap();
@@ -157,15 +157,15 @@ async fn init_backend(border_gateway: bool) {
     sleep(Duration::from_millis(300)).await;
 }
 
-async fn init_relay() {
-    chirpstack_gateway_relay::logging::setup("chirpstack-gateway-relay", log::Level::Trace, false)
+async fn init_mesh() {
+    chirpstack_gateway_mesh::logging::setup("chirpstack-gateway-mesh", log::Level::Trace, false)
         .unwrap();
 
     tokio::spawn({
         let conf = config::get();
 
         async move {
-            chirpstack_gateway_relay::cmd::root::run(&conf)
+            chirpstack_gateway_mesh::cmd::root::run(&conf)
                 .await
                 .unwrap();
         }
@@ -182,7 +182,7 @@ async fn init_relay() {
     });
 
     tokio::spawn(async move {
-        let mut cmd_sock = RELAY_BACKEND_COMMAND_SOCK.get().unwrap().lock().await;
+        let mut cmd_sock = MESH_BACKEND_COMMAND_SOCK.get().unwrap().lock().await;
         let _ = cmd_sock.recv().await;
         cmd_sock
             .send(vec![2, 2, 2, 2, 2, 2, 2, 2].into())

@@ -1,5 +1,5 @@
 [Unit]
-Description=ChirpStack Gateway Relay
+Description=ChirpStack Gateway Mesh
 Documentation=https://www.chirpstack.io/
 Wants=network-online.target
 After=network-online.target
@@ -7,7 +7,7 @@ After=network-online.target
 [Service]
 User=chirpstack
 Group=chirpstack
-ExecStart=/usr/bin/chirpstack-gateway-relay -c /etc/chirpstack-gateway-relay/chirpstack-gateway-relay.toml -c /etc/chirpstack-gateway-relay/region.toml
+ExecStart=/usr/bin/chirpstack-gateway-mesh -c /etc/chirpstack-gateway-mesh/chirpstack-gateway-mesh.toml -c /etc/chirpstack-gateway-mesh/region.toml
 Restart=on-failure
 
 [Install]

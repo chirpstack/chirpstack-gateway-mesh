@@ -13,14 +13,14 @@ use crate::{
     config::{self, Configuration},
     helpers,
     packets::{
-        self, DownlinkMetadata, Payload, PayloadType, RelayPacket, UplinkMetadata, UplinkPayload,
+        self, DownlinkMetadata, MeshPacket, Payload, PayloadType, UplinkMetadata, UplinkPayload,
         MHDR,
     },
     proxy,
 };
 
 static CTX_PREFIX: [u8; 3] = [1, 2, 3];
-static RELAY_CHANNEL: Mutex<usize> = Mutex::new(0);
+static MESH_CHANNEL: Mutex<usize> = Mutex::new(0);
 static UPLINK_ID: Mutex<u16> = Mutex::new(0);
 static UPLINK_CONTEXT: Lazy<Mutex<HashMap<u16, Vec<u8>>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
@@ -34,15 +34,15 @@ pub async fn handle_uplink(border_gateway: bool, pl: gw::UplinkFrame) -> Result<
     }
 }
 
-// Handle Proprietary LoRaWAN payload (relay encapsulated).
-pub async fn handle_relay(border_gateway: bool, pl: gw::UplinkFrame) -> Result<()> {
-    let packet = RelayPacket::from_slice(&pl.phy_payload)?;
+// Handle Proprietary LoRaWAN payload (mesh encapsulated).
+pub async fn handle_mesh(border_gateway: bool, pl: gw::UplinkFrame) -> Result<()> {
+    let packet = MeshPacket::from_slice(&pl.phy_payload)?;
 
     // If we can't add the packet to the cache, it means we have already seen the packet and we can
     // drop it.
     if !PAYLOAD_CACHE.lock().unwrap().add((&packet).into()) {
         trace!(
-            "Dropping packet as it has already been seen, relay_packet: {}",
+            "Dropping packet as it has already been seen, mesh_packet: {}",
             packet
         );
         return Ok(());
@@ -51,10 +51,10 @@ pub async fn handle_relay(border_gateway: bool, pl: gw::UplinkFrame) -> Result<(
     match border_gateway {
         // In this case we only care about proxy-ing relayed uplinks
         true => match packet.mhdr.payload_type {
-            PayloadType::Uplink => proxy_uplink_relay_packet(&pl, packet).await,
+            PayloadType::Uplink => proxy_uplink_mesh_packet(&pl, packet).await,
             _ => Ok(()),
         },
-        false => relay_relay_packet(&pl, packet).await,
+        false => relay_mesh_packet(&pl, packet).await,
     }
 }
 
@@ -92,8 +92,8 @@ async fn proxy_uplink_lora_packet(pl: &gw::UplinkFrame) -> Result<()> {
     proxy::send_uplink(pl).await
 }
 
-async fn proxy_uplink_relay_packet(pl: &gw::UplinkFrame, packet: RelayPacket) -> Result<()> {
-    let relay_pl = match &packet.payload {
+async fn proxy_uplink_mesh_packet(pl: &gw::UplinkFrame, packet: MeshPacket) -> Result<()> {
+    let mesh_pl = match &packet.payload {
         Payload::Uplink(v) => v,
         _ => {
             return Err(anyhow!("Expected Uplink payload"));
@@ -101,7 +101,7 @@ async fn proxy_uplink_relay_packet(pl: &gw::UplinkFrame, packet: RelayPacket) ->
     };
 
     info!(
-        "Unwrapping relayed uplink, uplink_id: {}, relay_packet: {}",
+        "Unwrapping relayed uplink, uplink_id: {}, mesh_packet: {}",
         pl.rx_info.as_ref().map(|v| v.uplink_id).unwrap_or_default(),
         packet
     );
@@ -118,35 +118,35 @@ async fn proxy_uplink_relay_packet(pl: &gw::UplinkFrame, packet: RelayPacket) ->
             .insert("hop_count".to_string(), (packet.mhdr.hop_count).to_string());
         rx_info
             .metadata
-            .insert("relay_id".to_string(), hex::encode(relay_pl.relay_id));
+            .insert("relay_id".to_string(), hex::encode(mesh_pl.relay_id));
 
         // Set RSSI and SNR.
-        rx_info.snr = relay_pl.metadata.snr.into();
-        rx_info.rssi = relay_pl.metadata.rssi.into();
+        rx_info.snr = mesh_pl.metadata.snr.into();
+        rx_info.rssi = mesh_pl.metadata.rssi.into();
 
         // Set context.
         rx_info.context = {
             let mut ctx = Vec::with_capacity(CTX_PREFIX.len() + 6); // Relay ID = 4 + Uplink ID = 2
             ctx.extend_from_slice(&CTX_PREFIX);
-            ctx.extend_from_slice(&relay_pl.relay_id);
-            ctx.extend_from_slice(&relay_pl.metadata.uplink_id.to_be_bytes());
+            ctx.extend_from_slice(&mesh_pl.relay_id);
+            ctx.extend_from_slice(&mesh_pl.metadata.uplink_id.to_be_bytes());
             ctx
         };
     }
 
     // Set TxInfo.
     if let Some(tx_info) = &mut pl.tx_info {
-        tx_info.frequency = helpers::chan_to_frequency(relay_pl.metadata.channel)?;
-        tx_info.modulation = Some(helpers::dr_to_modulation(relay_pl.metadata.dr, false)?);
+        tx_info.frequency = helpers::chan_to_frequency(mesh_pl.metadata.channel)?;
+        tx_info.modulation = Some(helpers::dr_to_modulation(mesh_pl.metadata.dr, false)?);
     }
 
     // Set original PHYPayload.
-    pl.phy_payload.clone_from(&relay_pl.phy_payload);
+    pl.phy_payload.clone_from(&mesh_pl.phy_payload);
 
     proxy::send_uplink(&pl).await
 }
 
-async fn relay_relay_packet(_: &gw::UplinkFrame, mut packet: RelayPacket) -> Result<()> {
+async fn relay_mesh_packet(_: &gw::UplinkFrame, mut packet: MeshPacket) -> Result<()> {
     let conf = config::get();
     let relay_id = backend::get_relay_id().await?;
 
@@ -155,13 +155,13 @@ async fn relay_relay_packet(_: &gw::UplinkFrame, mut packet: RelayPacket) -> Res
             if pl.relay_id == relay_id {
                 trace!("Dropping packet as this relay was the sender");
 
-                // Drop the packet, as this Relay was the original sender.
+                // Drop the packet, as we are the original sender.
                 return Ok(());
             }
         }
         packets::Payload::Downlink(pl) => {
             if pl.relay_id == relay_id {
-                // We must unwrap the Relay encapsulated packet and send it to the
+                // We must unwrap the mesh encapsulated packet and send it to the
                 // End Device.
 
                 let pl = gw::DownlinkFrame {
@@ -192,7 +192,7 @@ async fn relay_relay_packet(_: &gw::UplinkFrame, mut packet: RelayPacket) -> Res
                 };
 
                 info!(
-                    "Unwrapping relayed downlink, downlink_id: {}, relay_packet: {}",
+                    "Unwrapping relayed downlink, downlink_id: {}, mesh_packet: {}",
                     pl.downlink_id, packet
                 );
                 return helpers::tx_ack_to_err(&backend::send_downlink(&pl).await?);
@@ -200,13 +200,13 @@ async fn relay_relay_packet(_: &gw::UplinkFrame, mut packet: RelayPacket) -> Res
         }
     }
 
-    // In any other case, we increment the hop_count and re-transmit the relay encapsulated
+    // In any other case, we increment the hop_count and re-transmit the mesh encapsulated
     // packet.
 
     // Increment hop count.
     packet.mhdr.hop_count += 1;
 
-    if packet.mhdr.hop_count > conf.relay.max_hop_count {
+    if packet.mhdr.hop_count > conf.mesh.max_hop_count {
         return Err(anyhow!("Max hop count exceeded"));
     }
 
@@ -215,12 +215,12 @@ async fn relay_relay_packet(_: &gw::UplinkFrame, mut packet: RelayPacket) -> Res
         items: vec![gw::DownlinkFrameItem {
             phy_payload: packet.to_vec()?,
             tx_info: Some(gw::DownlinkTxInfo {
-                frequency: get_relay_frequency(&conf)?,
+                frequency: get_mesh_frequency(&conf)?,
                 modulation: Some(helpers::data_rate_to_gw_modulation(
-                    &conf.relay.data_rate,
+                    &conf.mesh.data_rate,
                     false,
                 )),
-                power: conf.relay.tx_power,
+                power: conf.mesh.tx_power,
                 timing: Some(gw::Timing {
                     parameters: Some(gw::timing::Parameters::Immediately(
                         gw::ImmediatelyTimingInfo {},
@@ -234,10 +234,10 @@ async fn relay_relay_packet(_: &gw::UplinkFrame, mut packet: RelayPacket) -> Res
     };
 
     info!(
-        "Re-relaying relayed frame, downlink_id: {}, relay_packet: {}",
+        "Re-relaying mesh packet, downlink_id: {}, mesh_packet: {}",
         pl.downlink_id, packet
     );
-    backend::relay(&pl).await
+    backend::mesh(&pl).await
 }
 
 async fn relay_uplink_lora_packet(pl: &gw::UplinkFrame) -> Result<()> {
@@ -256,7 +256,7 @@ async fn relay_uplink_lora_packet(pl: &gw::UplinkFrame) -> Result<()> {
         .as_ref()
         .ok_or_else(|| anyhow!("modulation is None"))?;
 
-    let packet = RelayPacket {
+    let packet = MeshPacket {
         mhdr: MHDR {
             payload_type: PayloadType::Uplink,
             hop_count: 1,
@@ -279,10 +279,10 @@ async fn relay_uplink_lora_packet(pl: &gw::UplinkFrame) -> Result<()> {
         items: vec![gw::DownlinkFrameItem {
             phy_payload: packet.to_vec()?,
             tx_info: Some(gw::DownlinkTxInfo {
-                frequency: get_relay_frequency(&conf)?,
-                power: conf.relay.tx_power,
+                frequency: get_mesh_frequency(&conf)?,
+                power: conf.mesh.tx_power,
                 modulation: Some(helpers::data_rate_to_gw_modulation(
-                    &conf.relay.data_rate,
+                    &conf.mesh.data_rate,
                     false,
                 )),
                 timing: Some(gw::Timing {
@@ -298,11 +298,11 @@ async fn relay_uplink_lora_packet(pl: &gw::UplinkFrame) -> Result<()> {
     };
 
     info!(
-        "Relaying uplink LoRa frame, uplink_id: {}, downlink_id: {}, relay_packet: {}",
+        "Relaying uplink LoRa frame, uplink_id: {}, downlink_id: {}, mesh_packet: {}",
         rx_info.uplink_id, pl.downlink_id, packet,
     );
 
-    backend::relay(&pl).await
+    backend::mesh(&pl).await
 }
 
 async fn relay_downlink_lora_packet(pl: &gw::DownlinkFrame) -> Result<gw::DownlinkTxAck> {
@@ -345,7 +345,7 @@ async fn relay_downlink_lora_packet(pl: &gw::DownlinkFrame) -> Result<gw::Downli
             .get(CTX_PREFIX.len()..CTX_PREFIX.len() + 6)
             .ok_or_else(|| anyhow!("context does not contain enough bytes"))?;
 
-        let packet = packets::RelayPacket {
+        let packet = packets::MeshPacket {
             mhdr: packets::MHDR {
                 payload_type: packets::PayloadType::Downlink,
                 hop_count: 1,
@@ -376,10 +376,10 @@ async fn relay_downlink_lora_packet(pl: &gw::DownlinkFrame) -> Result<gw::Downli
             items: vec![gw::DownlinkFrameItem {
                 phy_payload: packet.to_vec()?,
                 tx_info: Some(gw::DownlinkTxInfo {
-                    frequency: get_relay_frequency(&conf)?,
-                    power: conf.relay.tx_power,
+                    frequency: get_mesh_frequency(&conf)?,
+                    power: conf.mesh.tx_power,
                     modulation: Some(helpers::data_rate_to_gw_modulation(
-                        &conf.relay.data_rate,
+                        &conf.mesh.data_rate,
                         false,
                     )),
                     timing: Some(gw::Timing {
@@ -395,11 +395,11 @@ async fn relay_downlink_lora_packet(pl: &gw::DownlinkFrame) -> Result<gw::Downli
         };
 
         info!(
-            "Sending downlink frame as relayed downlink, downlink_id: {}, relay_packet: {}",
+            "Sending downlink frame as relayed downlink, downlink_id: {}, mesh_packet: {}",
             pl.downlink_id, packet
         );
 
-        match backend::relay(&pl).await {
+        match backend::mesh(&pl).await {
             Ok(_) => {
                 tx_ack_items[i].status = gw::TxAckStatus::Ok.into();
                 break;
@@ -419,19 +419,19 @@ async fn relay_downlink_lora_packet(pl: &gw::DownlinkFrame) -> Result<gw::Downli
     })
 }
 
-fn get_relay_frequency(conf: &Configuration) -> Result<u32> {
-    if conf.relay.frequencies.is_empty() {
-        return Err(anyhow!("No relay frequencies are configured"));
+fn get_mesh_frequency(conf: &Configuration) -> Result<u32> {
+    if conf.mesh.frequencies.is_empty() {
+        return Err(anyhow!("No mesh frequencies are configured"));
     }
 
-    let mut relay_channel = RELAY_CHANNEL.lock().unwrap();
-    *relay_channel += 1;
+    let mut mesh_channel = MESH_CHANNEL.lock().unwrap();
+    *mesh_channel += 1;
 
-    if *relay_channel >= conf.relay.frequencies.len() {
-        *relay_channel = 0;
+    if *mesh_channel >= conf.mesh.frequencies.len() {
+        *mesh_channel = 0;
     }
 
-    Ok(conf.relay.frequencies[*relay_channel])
+    Ok(conf.mesh.frequencies[*mesh_channel])
 }
 
 fn get_uplink_id() -> u16 {

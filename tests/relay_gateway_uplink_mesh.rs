@@ -3,21 +3,21 @@ extern crate anyhow;
 
 use chirpstack_api::gw;
 use chirpstack_api::prost::Message;
-use chirpstack_gateway_relay::packets;
+use chirpstack_gateway_mesh::packets;
 use tokio::time::{timeout, Duration};
 use zeromq::{SocketRecv, SocketSend};
 
 mod common;
 
 /*
-    This tests the scenario when the Relay Gateway receives an uplink Relay encapsulated frame.
+    This tests the scenario when the Relay Gateway receives an uplink mesh encapsulated frame.
     The Relay gateway will then re-transmit this frame.
 */
 #[tokio::test]
-async fn test_relay_gateway_uplink_relay() {
+async fn test_relay_gateway_uplink_mesh() {
     common::setup(false).await;
 
-    let mut packet = packets::Packet::Relay(packets::RelayPacket {
+    let mut packet = packets::Packet::Mesh(packets::MeshPacket {
         mhdr: packets::MHDR {
             payload_type: packets::PayloadType::Uplink,
             hop_count: 1,
@@ -60,7 +60,7 @@ async fn test_relay_gateway_uplink_relay() {
 
     // Publish uplink event
     {
-        let mut event_sock = common::RELAY_BACKEND_EVENT_SOCK.get().unwrap().lock().await;
+        let mut event_sock = common::MESH_BACKEND_EVENT_SOCK.get().unwrap().lock().await;
         event_sock
             .send(
                 vec![
@@ -75,9 +75,9 @@ async fn test_relay_gateway_uplink_relay() {
     }
 
     // We expect packet to be wrapped as 'downlink' and received by the
-    // relay concentratord.
+    // mesh concentratord.
     let down: gw::DownlinkFrame = {
-        let mut cmd_sock = common::RELAY_BACKEND_COMMAND_SOCK
+        let mut cmd_sock = common::MESH_BACKEND_COMMAND_SOCK
             .get()
             .unwrap()
             .lock()
@@ -91,18 +91,18 @@ async fn test_relay_gateway_uplink_relay() {
     };
 
     let down_item = down.items.first().unwrap();
-    let relay_packet = packets::Packet::from_slice(&down_item.phy_payload).unwrap();
+    let mesh_packet = packets::Packet::from_slice(&down_item.phy_payload).unwrap();
 
     // The hop_count must be incremented.
-    if let packets::Packet::Relay(v) = &mut packet {
+    if let packets::Packet::Mesh(v) = &mut packet {
         v.mhdr.hop_count += 1;
     }
 
-    assert_eq!(packet, relay_packet);
+    assert_eq!(packet, mesh_packet);
 
     // Publish the uplink one more time, this time we expect that it will be discarded.
     {
-        let mut event_sock = common::RELAY_BACKEND_EVENT_SOCK.get().unwrap().lock().await;
+        let mut event_sock = common::MESH_BACKEND_EVENT_SOCK.get().unwrap().lock().await;
         event_sock
             .send(
                 vec![
@@ -118,7 +118,7 @@ async fn test_relay_gateway_uplink_relay() {
 
     // As the item has beem discarded, receiving from the cmd socket should timeout.
     {
-        let mut cmd_sock = common::RELAY_BACKEND_COMMAND_SOCK
+        let mut cmd_sock = common::MESH_BACKEND_COMMAND_SOCK
             .get()
             .unwrap()
             .lock()

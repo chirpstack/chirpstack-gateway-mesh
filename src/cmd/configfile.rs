@@ -23,20 +23,20 @@ pub fn run() {
   log_to_syslog=false
 
 
-# Relay configuration.
-[relay]
+# Mesh configuration.
+[mesh]
 
   # Border Gateway.
   #
-  # If this is set to true, then the ChirpStack Gateway Relay will consider
+  # If this is set to true, then the ChirpStack Gateway Mesh will consider
   # this gateway as a Border Gateway, meaning that it will unwrap relayed
   # uplinks and forward these to the proxy API, rather than relaying these.
-  border_gateway={{ relay.border_gateway }}
+  border_gateway={{ mesh.border_gateway }}
 
   # Max hop count.
   #
   # This defines the maximum number of hops a relayed payload will pass.
-  max_hop_count={{ relay.max_hop_count }}
+  max_hop_count={{ mesh.max_hop_count }}
 
   # Ignore direct uplinks (Border Gateway).
   #
@@ -44,14 +44,14 @@ pub fn run() {
   # encapsulated) will be silently ignored. This option is especially useful
   # for testing, in which case you want to set this to true for the Border
   # Gateway.
-  border_gateway_ignore_direct_uplinks={{ relay.border_gateway_ignore_direct_uplinks }}
+  border_gateway_ignore_direct_uplinks={{ mesh.border_gateway_ignore_direct_uplinks }}
 
-  # Relay frequencies.
+  # Mesh frequencies.
   #
-  # The ChirpStack Gateway Relay will randomly use one of the configured
+  # The ChirpStack Gateway Mesh will randomly use one of the configured
   # frequencies when relaying uplink and downlink messages.
   frequencies=[
-    {{#each relay.frequencies}}
+    {{#each mesh.frequencies}}
     {{this}},
     {{/each}}
   ]
@@ -59,34 +59,34 @@ pub fn run() {
   # TX Power (EIRP).
   #
   # The TX Power in EIRP used when relaying uplink and downlink messages.
-  tx_power={{ relay.tx_power }}
+  tx_power={{ mesh.tx_power }}
 
   # Data-rate properties.
   #
   # The data-rate properties when relaying uplink and downlink messages.
-  [relay.data_rate]
+  [mesh.data_rate]
   
     # Modulation.
     #
     # Valid options are: LORA, FSK
-    modulation="{{ relay.data_rate.modulation }}"
+    modulation="{{ mesh.data_rate.modulation }}"
 
     # Spreading-factor (LoRa).
-    spreading_factor={{ relay.data_rate.spreading_factor }}
+    spreading_factor={{ mesh.data_rate.spreading_factor }}
 
     # Bandwidth (LoRa).
-    bandwidth={{ relay.data_rate.bandwidth }}
+    bandwidth={{ mesh.data_rate.bandwidth }}
 
     # Code-rate (LoRa).
-    code_rate="{{ relay.data_rate.code_rate }}"
+    code_rate="{{ mesh.data_rate.code_rate }}"
 
     # Bitrate (FSK).
-    bitrate={{ relay.data_rate.bitrate }}
+    bitrate={{ mesh.data_rate.bitrate }}
 
 
   # Proxy API configuration.
   #
-  # If the Gateway Relay is configured to operate as Border Gateway. It
+  # If the gateway is configured to operate as Border Gateway. It
   # will unwrap relayed uplink frames, and will wrap downlink payloads that
   # must be relayed. In this case the ChirpStack MQTT Forwarder must be
   # configured to use the proxy API instead of the Concentratord API.
@@ -97,19 +97,19 @@ pub fn run() {
   #
   # This configuration is only used when the border_gateway option is set
   # to true.
-  [relay.proxy_api]
+  [mesh.proxy_api]
 
     # Event PUB socket bind.
-    event_bind="{{ relay.proxy_api.event_bind }}"
+    event_bind="{{ mesh.proxy_api.event_bind }}"
 
     # Command REP socket bind.
-    command_bind="{{ relay.proxy_api.command_bind }}"
+    command_bind="{{ mesh.proxy_api.command_bind }}"
 
 
 # Backend configuration.
 [backend]
 
-  # ChirpStack Concentratord configuration (Relay <> End Device).
+  # ChirpStack Concentratord configuration (end-device communication).
   [backend.concentratord]
 
     # Event API URL.
@@ -119,18 +119,19 @@ pub fn run() {
     command_url="{{ backend.concentratord.command_url }}"
 
 
-  # ChirpStack Concentratord configuration (Relay <> Relay).
+  # ChirpStack Concentratord configuration (mesh communication).
   #
   # While not required, this configuration makes it possible to use a different
-  # Concentratord instance for the Relay <> Relay communication. E.g. this
-  # makes it possible to use ISM2400 for Relay <> Relay communication.
-  [backend.relay_concentratord]
+  # Concentratord instance for the mesh communication. E.g. this
+  # makes it possible to use ISM2400 for mesh communication and EU868 for
+  # communication with the end-devices.
+  [backend.mesh_concentratord]
 
     # Event API URL.
-    event_url="{{ backend.relay_concentratord.event_url }}"
+    event_url="{{ backend.mesh_concentratord.event_url }}"
 
     # Command API URL.
-    command_url="{{ backend.relay_concentratord.command_url }}"
+    command_url="{{ backend.mesh_concentratord.command_url }}"
 "#;
 
     let conf = config::get();

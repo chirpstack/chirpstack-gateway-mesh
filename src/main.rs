@@ -5,7 +5,7 @@ use std::{process, str::FromStr};
 use clap::{Parser, Subcommand};
 use log::info;
 
-use chirpstack_gateway_relay::{cmd, config, logging};
+use chirpstack_gateway_mesh::{cmd, config, logging};
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -49,7 +49,7 @@ async fn main() {
     info!(
         "Starting {} (border_gateway: {},version: {}, docs: {})",
         env!("CARGO_PKG_DESCRIPTION"),
-        conf.relay.border_gateway,
+        conf.mesh.border_gateway,
         env!("CARGO_PKG_VERSION"),
         env!("CARGO_PKG_HOMEPAGE"),
     );

@@ -7,14 +7,14 @@ use once_cell::sync::OnceCell;
 use tokio::sync::{mpsc, oneshot, Mutex};
 
 use crate::config::Configuration;
-use crate::{helpers, proxy, relay};
+use crate::{helpers, mesh, proxy};
 use chirpstack_api::gw;
 
 static GATEWAY_ID: OnceCell<Mutex<[u8; 8]>> = OnceCell::new();
 static RELAY_ID: OnceCell<Mutex<[u8; 4]>> = OnceCell::new();
 
 static CONCENTRATORD_CMD_CHAN: OnceCell<CommandChannel> = OnceCell::new();
-static RELAY_CONCENTRATORD_CMD_CHAN: OnceCell<CommandChannel> = OnceCell::new();
+static MESH_CONCENTRATORD_CMD_CHAN: OnceCell<CommandChannel> = OnceCell::new();
 
 type Event = (String, Vec<u8>);
 type Command = ((String, Vec<u8>), oneshot::Sender<Result<Vec<u8>>>);
@@ -22,7 +22,7 @@ type CommandChannel = mpsc::UnboundedSender<Command>;
 
 pub async fn setup(conf: &Configuration) -> Result<()> {
     setup_concentratord(conf).await?;
-    setup_relay_concentratord(conf).await?;
+    setup_mesh_conncentratord(conf).await?;
     Ok(())
 }
 
@@ -101,11 +101,11 @@ async fn setup_concentratord(conf: &Configuration) -> Result<()> {
 
     // Spawn event handler.
     tokio::spawn({
-        let border_gateway = conf.relay.border_gateway;
-        let border_gateway_ignore_direct_uplinks = conf.relay.border_gateway_ignore_direct_uplinks;
+        let border_gateway = conf.mesh.border_gateway;
+        let border_gateway_ignore_direct_uplinks = conf.mesh.border_gateway_ignore_direct_uplinks;
         let filters = lrwn_filters::Filters {
-            dev_addr_prefixes: conf.relay.filters.dev_addr_prefixes.clone(),
-            join_eui_prefixes: conf.relay.filters.join_eui_prefixes.clone(),
+            dev_addr_prefixes: conf.mesh.filters.dev_addr_prefixes.clone(),
+            join_eui_prefixes: conf.mesh.filters.join_eui_prefixes.clone(),
         };
 
         async move {
@@ -122,10 +122,10 @@ async fn setup_concentratord(conf: &Configuration) -> Result<()> {
     Ok(())
 }
 
-async fn setup_relay_concentratord(conf: &Configuration) -> Result<()> {
+async fn setup_mesh_conncentratord(conf: &Configuration) -> Result<()> {
     info!(
-        "Setting up Relay Concentratord backend, event_url: {}, command_url: {}",
-        conf.backend.relay_concentratord.event_url, conf.backend.relay_concentratord.command_url
+        "Setting up Mesh Concentratord backend, event_url: {}, command_url: {}",
+        conf.backend.mesh_concentratord.event_url, conf.backend.mesh_concentratord.command_url
     );
 
     // Setup ZMQ command.
@@ -135,7 +135,7 @@ async fn setup_relay_concentratord(conf: &Configuration) -> Result<()> {
 
     // Spawn the zmq command handler to a dedicated thread.
     thread::spawn({
-        let command_url = conf.backend.relay_concentratord.command_url.clone();
+        let command_url = conf.backend.mesh_concentratord.command_url.clone();
 
         move || {
             let zmq_ctx = zmq::Context::new();
@@ -147,7 +147,7 @@ async fn setup_relay_concentratord(conf: &Configuration) -> Result<()> {
                 cmd.1.send(resp).unwrap();
             }
 
-            error!("Relay Concentratord command loop has been interrupted");
+            error!("Mesh Concentratord command loop has been interrupted");
         }
     });
 
@@ -167,7 +167,7 @@ async fn setup_relay_concentratord(conf: &Configuration) -> Result<()> {
 
     // set CMD channel.
 
-    RELAY_CONCENTRATORD_CMD_CHAN
+    MESH_CONCENTRATORD_CMD_CHAN
         .set(cmd_tx)
         .map_err(|e| anyhow!("OnceCell error: {:?}", e))?;
 
@@ -177,7 +177,7 @@ async fn setup_relay_concentratord(conf: &Configuration) -> Result<()> {
 
     // Spawn the zmq event handler to a dedicated thread;
     thread::spawn({
-        let event_url = conf.backend.relay_concentratord.event_url.clone();
+        let event_url = conf.backend.mesh_concentratord.event_url.clone();
 
         move || {
             let zmq_ctx = zmq::Context::new();
@@ -198,10 +198,10 @@ async fn setup_relay_concentratord(conf: &Configuration) -> Result<()> {
 
     // Spawn event handler.
     tokio::spawn({
-        let border_gateway = conf.relay.border_gateway;
+        let border_gateway = conf.mesh.border_gateway;
 
         async move {
-            relay_event_loop(border_gateway, event_rx).await;
+            mesh_event_loop(border_gateway, event_rx).await;
         }
     });
 
@@ -230,11 +230,11 @@ async fn event_loop(
     }
 }
 
-async fn relay_event_loop(border_gateway: bool, mut event_rx: mpsc::UnboundedReceiver<Event>) {
-    trace!("Starting relay event loop");
+async fn mesh_event_loop(border_gateway: bool, mut event_rx: mpsc::UnboundedReceiver<Event>) {
+    trace!("Starting mesh event loop");
     while let Some(event) = event_rx.recv().await {
-        if let Err(e) = handle_relay_event_msg(border_gateway, &event).await {
-            error!("Handle relay event error: {}", e);
+        if let Err(e) = handle_mesh_event_msg(border_gateway, &event).await {
+            error!("Handle mesh event error: {}", e);
             continue;
         }
     }
@@ -290,7 +290,7 @@ async fn handle_event_msg(
                 }
 
                 info!("Frame received - {}", helpers::format_uplink(&pl)?);
-                relay::handle_uplink(border_gateway, pl).await?;
+                mesh::handle_uplink(border_gateway, pl).await?;
             }
         }
         "stats" => {
@@ -308,9 +308,9 @@ async fn handle_event_msg(
     Ok(())
 }
 
-async fn handle_relay_event_msg(border_gateway: bool, event: &Event) -> Result<()> {
+async fn handle_mesh_event_msg(border_gateway: bool, event: &Event) -> Result<()> {
     trace!(
-        "Handling relay event, event: {}, data: {}",
+        "Handling mesh event, event: {}, data: {}",
         event.0,
         hex::encode(&event.1)
     );
@@ -330,10 +330,10 @@ async fn handle_relay_event_msg(border_gateway: bool, event: &Event) -> Result<(
                 }
             }
 
-            // The relay event msg must always be a proprietary payload.
+            // The mesh event msg must always be a proprietary payload.
             if pl.phy_payload.first().cloned().unwrap_or_default() & 0xe0 == 0xe0 {
-                info!("Relay frame received - {}", helpers::format_uplink(&pl)?);
-                relay::handle_relay(border_gateway, pl).await?;
+                info!("Mesh frame received - {}", helpers::format_uplink(&pl)?);
+                mesh::handle_mesh(border_gateway, pl).await?;
             }
         }
         _ => {
@@ -360,28 +360,28 @@ async fn send_command(cmd: &str, b: &[u8]) -> Result<Vec<u8>> {
     cmd_rx.await?
 }
 
-async fn send_relay_command(cmd: &str, b: &[u8]) -> Result<Vec<u8>> {
+async fn send_mesh_command(cmd: &str, b: &[u8]) -> Result<Vec<u8>> {
     trace!(
-        "Sending relay command, command: {}, data: {}",
+        "Sending mesh command, command: {}, data: {}",
         cmd,
         hex::encode(b)
     );
 
-    let cmd_chan = RELAY_CONCENTRATORD_CMD_CHAN
+    let cmd_chan = MESH_CONCENTRATORD_CMD_CHAN
         .get()
-        .ok_or_else(|| anyhow!("RELAY_CONCENTRATORD_CMD_CHAN is not set"))?;
+        .ok_or_else(|| anyhow!("MESH_CONCENTRATORD_CMD_CHAN is not set"))?;
 
     let (cmd_tx, cmd_rx) = oneshot::channel::<Result<Vec<u8>>>();
     cmd_chan.send(((cmd.to_string(), b.to_vec()), cmd_tx))?;
     cmd_rx.await?
 }
 
-pub async fn relay(pl: &gw::DownlinkFrame) -> Result<()> {
-    info!("Sending relay frame - {}", helpers::format_downlink(pl)?);
+pub async fn mesh(pl: &gw::DownlinkFrame) -> Result<()> {
+    info!("Sending mesh frame - {}", helpers::format_downlink(pl)?);
 
     let tx_ack = {
         let b = pl.encode_to_vec();
-        let resp_b = send_relay_command("down", &b).await?;
+        let resp_b = send_mesh_command("down", &b).await?;
         gw::DownlinkTxAck::decode(resp_b.as_slice())?
     };
     helpers::tx_ack_to_err(&tx_ack)?;
