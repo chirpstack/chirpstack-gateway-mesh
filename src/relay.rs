@@ -41,6 +41,10 @@ pub async fn handle_relay(border_gateway: bool, pl: gw::UplinkFrame) -> Result<(
     // If we can't add the packet to the cache, it means we have already seen the packet and we can
     // drop it.
     if !PAYLOAD_CACHE.lock().unwrap().add((&packet).into()) {
+        trace!(
+            "Dropping packet as it has already been seen, relay_packet: {}",
+            packet
+        );
         return Ok(());
     };
 
