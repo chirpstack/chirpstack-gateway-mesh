@@ -7,6 +7,8 @@ use chirpstack_gateway_mesh::packets;
 use tokio::time::{timeout, Duration};
 use zeromq::{SocketRecv, SocketSend};
 
+use chirpstack_gateway_mesh::aes128::Aes128Key;
+
 mod common;
 
 /*
@@ -17,22 +19,27 @@ mod common;
 async fn test_relay_gateway_uplink_mesh() {
     common::setup(false).await;
 
-    let mut packet = packets::Packet::Mesh(packets::MeshPacket {
-        mhdr: packets::MHDR {
-            payload_type: packets::PayloadType::Uplink,
-            hop_count: 1,
-        },
-        payload: packets::Payload::Uplink(packets::UplinkPayload {
-            metadata: packets::UplinkMetadata {
-                uplink_id: 123,
-                dr: 0,
-                rssi: 0,
-                snr: 0,
-                channel: 0,
+    let mut packet = packets::Packet::Mesh({
+        let mut packet = packets::MeshPacket {
+            mhdr: packets::MHDR {
+                payload_type: packets::PayloadType::Uplink,
+                hop_count: 1,
             },
-            relay_id: [1, 2, 3, 4],
-            phy_payload: vec![4, 3, 2, 1],
-        }),
+            payload: packets::Payload::Uplink(packets::UplinkPayload {
+                metadata: packets::UplinkMetadata {
+                    uplink_id: 123,
+                    dr: 0,
+                    rssi: 0,
+                    snr: 0,
+                    channel: 0,
+                },
+                relay_id: [1, 2, 3, 4],
+                phy_payload: vec![4, 3, 2, 1],
+            }),
+            mic: None,
+        };
+        packet.set_mic(Aes128Key::null()).unwrap();
+        packet
     });
 
     let up = gw::UplinkFrame {
@@ -96,6 +103,7 @@ async fn test_relay_gateway_uplink_mesh() {
     // The hop_count must be incremented.
     if let packets::Packet::Mesh(v) = &mut packet {
         v.mhdr.hop_count += 1;
+        v.set_mic(Aes128Key::null()).unwrap();
     }
 
     assert_eq!(packet, mesh_packet);

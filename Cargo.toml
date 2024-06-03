@@ -40,6 +40,8 @@
   futures = "0.3"
   prost-types = "0.12"
   zmq = "0.10"
+  cmac = { version = "0.7" }
+  aes = { version = "0.8" }
 
 [dev-dependencies]
   zeromq = "0.3.5"
@@ -52,24 +54,24 @@
   codegen-units = 1
   panic = "abort"
 
-# Debian packaging.
-[package.metadata.deb]
-  assets = [
-    [
-      "target/release/chirpstack-gateway-mesh",
-      "usr/bin/",
-      "755",
-    ],
-    [
-      "configuration/*.toml",
-      "etc/chirpstack-gateway-mesh/",
-      "640",
-    ],
-  ]
-  conf-files = [
-    "/etc/chirpstack-gateway-mesh/chirpstack-gateway-mesh.toml",
-    "/etc/chirpstack-gateway-mesh/region_eu868.toml",
-    "/etc/chirpstack-gateway-mesh/region_us915.toml",
-  ]
-  maintainer-scripts = "packaging/debian/"
-  systemd-units = { enable = true }
+  # Debian packaging.
+  [package.metadata.deb]
+    assets = [
+      [
+        "target/release/chirpstack-gateway-mesh",
+        "usr/bin/",
+        "755",
+      ],
+      [
+        "configuration/*.toml",
+        "etc/chirpstack-gateway-mesh/",
+        "640",
+      ],
+    ]
+    conf-files = [
+      "/etc/chirpstack-gateway-mesh/chirpstack-gateway-mesh.toml",
+      "/etc/chirpstack-gateway-mesh/region_eu868.toml",
+      "/etc/chirpstack-gateway-mesh/region_us915.toml",
+    ]
+    maintainer-scripts = "packaging/debian/"
+    systemd-units = { enable = true }

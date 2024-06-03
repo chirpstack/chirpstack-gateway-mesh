@@ -1,6 +1,10 @@
 use std::fmt;
 
+use aes::Aes128;
 use anyhow::Result;
+use cmac::{Cmac, Mac};
+
+use crate::aes128::Aes128Key;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Packet {
@@ -34,21 +38,31 @@ impl Packet {
 pub struct MeshPacket {
     pub mhdr: MHDR,
     pub payload: Payload,
+    pub mic: Option<[u8; 4]>,
 }
 
 impl MeshPacket {
     pub fn from_slice(b: &[u8]) -> Result<Self> {
-        if b.is_empty() {
+        let len = b.len();
+
+        if len == 0 {
             return Err(anyhow!("Input is empty"));
+        } else if len < 5 {
+            return Err(anyhow!("Not enough bytes to decode mhdr + mic"));
         }
 
         let mhdr = MHDR::from_byte(b[0])?;
+        let mut mic: [u8; 4] = [0; 4];
+        mic.copy_from_slice(&b[len - 4..len]);
 
         Ok(MeshPacket {
             payload: match mhdr.payload_type {
-                PayloadType::Uplink => Payload::Uplink(UplinkPayload::from_slice(&b[1..])?),
-                PayloadType::Downlink => Payload::Downlink(DownlinkPayload::from_slice(&b[1..])?),
+                PayloadType::Uplink => Payload::Uplink(UplinkPayload::from_slice(&b[1..len - 4])?),
+                PayloadType::Downlink => {
+                    Payload::Downlink(DownlinkPayload::from_slice(&b[1..len - 4])?)
+                }
             },
+            mic: Some(mic),
             mhdr,
         })
     }
@@ -59,7 +73,55 @@ impl MeshPacket {
             Payload::Uplink(v) => v.to_vec()?,
             Payload::Downlink(v) => v.to_vec()?,
         });
+
+        if let Some(mic) = self.mic {
+            b.extend_from_slice(&mic);
+        } else {
+            return Err(anyhow!("MIC is None"));
+        }
+
         Ok(b)
+    }
+
+    fn mic_bytes(&self) -> Result<Vec<u8>> {
+        let mut b = vec![self.mhdr.to_byte()?];
+        b.extend_from_slice(&match &self.payload {
+            Payload::Uplink(v) => v.to_vec()?,
+            Payload::Downlink(v) => v.to_vec()?,
+        });
+
+        Ok(b)
+    }
+
+    pub fn set_mic(&mut self, key: Aes128Key) -> Result<()> {
+        self.mic = Some(self.calculate_mic(key)?);
+        Ok(())
+    }
+
+    pub fn validate_mic(&self, key: Aes128Key) -> Result<bool> {
+        if let Some(mic) = self.mic {
+            if mic == self.calculate_mic(key)? {
+                Ok(true)
+            } else {
+                Ok(false)
+            }
+        } else {
+            Err(anyhow!("MIC is None"))
+        }
+    }
+
+    fn calculate_mic(&self, key: Aes128Key) -> Result<[u8; 4]> {
+        let mut mac = Cmac::<Aes128>::new_from_slice(&key.to_bytes()).unwrap();
+        mac.update(&self.mic_bytes()?);
+        let cmac_f = mac.finalize().into_bytes();
+        // sanity Check
+        if cmac_f.len() < 4 {
+            return Err(anyhow!("cmac_f is less than 4 bytes"));
+        }
+
+        let mut mic: [u8; 4] = [0; 4];
+        mic.clone_from_slice(&cmac_f[0..4]);
+        Ok(mic)
     }
 }
 
@@ -68,19 +130,21 @@ impl fmt::Display for MeshPacket {
         match &self.payload {
             Payload::Uplink(v) => write!(
                 f,
-                "[{:?} hop_count: {}, uplink_id: {}, relay_id: {}]",
+                "[{:?} hop_count: {}, uplink_id: {}, relay_id: {}, mic: {}]",
                 self.mhdr.payload_type,
                 self.mhdr.hop_count,
                 v.metadata.uplink_id,
                 hex::encode(v.relay_id),
+                self.mic.map(hex::encode).unwrap_or_default(),
             ),
             Payload::Downlink(v) => write!(
                 f,
-                "[{:?} hop_count: {}, uplink_id: {}, relay_id: {}]",
+                "[{:?} hop_count: {}, uplink_id: {}, relay_id: {}, mic: {}]",
                 self.mhdr.payload_type,
                 self.mhdr.hop_count,
                 v.metadata.uplink_id,
-                hex::encode(v.relay_id)
+                hex::encode(v.relay_id),
+                self.mic.map(hex::encode).unwrap_or_default(),
             ),
         }
     }
@@ -838,7 +902,8 @@ mod test {
             Test {
                 name: "uplink".into(),
                 bytes: vec![
-                    0xe2, 0x40, 0x03, 0x78, 0x34, 0x40, 0x01, 0x02, 0x03, 0x04, 0x05,
+                    0xe2, 0x40, 0x03, 0x78, 0x34, 0x40, 0x01, 0x02, 0x03, 0x04, 0x05, 0x01, 0x02,
+                    0x03, 0x04,
                 ],
                 expected_mesh_packet: MeshPacket {
                     mhdr: MHDR {
@@ -856,12 +921,14 @@ mod test {
                         relay_id: [0x01, 0x02, 0x03, 0x04],
                         phy_payload: vec![0x05],
                     }),
+                    mic: Some([0x01, 0x02, 0x03, 0x04]),
                 },
             },
             Test {
                 name: "downlink".into(),
                 bytes: vec![
-                    0xef, 0x40, 0x03, 0x84, 0x76, 0x28, 0xff, 0x01, 0x02, 0x03, 0x04, 0x05,
+                    0xef, 0x40, 0x03, 0x84, 0x76, 0x28, 0xff, 0x01, 0x02, 0x03, 0x04, 0x05, 0x01,
+                    0x02, 0x03, 0x04,
                 ],
                 expected_mesh_packet: MeshPacket {
                     mhdr: MHDR {
@@ -879,6 +946,7 @@ mod test {
                         relay_id: [0x01, 0x02, 0x03, 0x04],
                         phy_payload: vec![0x05],
                     }),
+                    mic: Some([0x01, 0x02, 0x03, 0x04]),
                 },
             },
         ];
@@ -902,7 +970,8 @@ mod test {
             Test {
                 name: "uplink".into(),
                 expected_bytes: vec![
-                    0xe2, 0x40, 0x03, 0x78, 0x34, 0x40, 0x01, 0x02, 0x03, 0x04, 0x05,
+                    0xe2, 0x40, 0x03, 0x78, 0x34, 0x40, 0x01, 0x02, 0x03, 0x04, 0x05, 0x01, 0x02,
+                    0x03, 0x04,
                 ],
                 mesh_packet: MeshPacket {
                     mhdr: MHDR {
@@ -920,12 +989,14 @@ mod test {
                         relay_id: [0x01, 0x02, 0x03, 0x04],
                         phy_payload: vec![0x05],
                     }),
+                    mic: Some([0x01, 0x02, 0x03, 0x04]),
                 },
             },
             Test {
                 name: "downlink".into(),
                 expected_bytes: vec![
-                    0xef, 0x40, 0x03, 0x84, 0x76, 0x28, 0xff, 0x01, 0x02, 0x03, 0x04, 0x05,
+                    0xef, 0x40, 0x03, 0x84, 0x76, 0x28, 0xff, 0x01, 0x02, 0x03, 0x04, 0x05, 0x01,
+                    0x02, 0x03, 0x04,
                 ],
                 mesh_packet: MeshPacket {
                     mhdr: MHDR {
@@ -943,6 +1014,7 @@ mod test {
                         relay_id: [0x01, 0x02, 0x03, 0x04],
                         phy_payload: vec![0x05],
                     }),
+                    mic: Some([0x01, 0x02, 0x03, 0x04]),
                 },
             },
         ];
@@ -966,7 +1038,8 @@ mod test {
             Test {
                 name: "mesh packet".into(),
                 bytes: vec![
-                    0xe2, 0x40, 0x03, 0x78, 0x34, 0x40, 0x01, 0x02, 0x03, 0x04, 0x05,
+                    0xe2, 0x40, 0x03, 0x78, 0x34, 0x40, 0x01, 0x02, 0x03, 0x04, 0x05, 0x01, 0x02,
+                    0x03, 0x04,
                 ],
                 expected_packet: Packet::Mesh(MeshPacket {
                     mhdr: MHDR {
@@ -984,6 +1057,7 @@ mod test {
                         relay_id: [0x01, 0x02, 0x03, 0x04],
                         phy_payload: vec![0x05],
                     }),
+                    mic: Some([0x01, 0x02, 0x03, 0x04]),
                 }),
             },
             Test {
@@ -1012,7 +1086,8 @@ mod test {
             Test {
                 name: "mesh packet".into(),
                 expected_bytes: vec![
-                    0xe2, 0x40, 0x03, 0x78, 0x34, 0x40, 0x01, 0x02, 0x03, 0x04, 0x05,
+                    0xe2, 0x40, 0x03, 0x78, 0x34, 0x40, 0x01, 0x02, 0x03, 0x04, 0x05, 0x01, 0x02,
+                    0x03, 0x04,
                 ],
                 packet: Packet::Mesh(MeshPacket {
                     mhdr: MHDR {
@@ -1030,6 +1105,7 @@ mod test {
                         relay_id: [0x01, 0x02, 0x03, 0x04],
                         phy_payload: vec![0x05],
                     }),
+                    mic: Some([0x01, 0x02, 0x03, 0x04]),
                 }),
             },
             Test {

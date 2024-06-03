@@ -5,6 +5,7 @@ use chirpstack_api::gw;
 use chirpstack_api::prost::Message;
 use zeromq::{SocketRecv, SocketSend};
 
+use chirpstack_gateway_mesh::aes128::Aes128Key;
 use chirpstack_gateway_mesh::packets;
 
 mod common;
@@ -81,26 +82,31 @@ async fn test_border_gateway_downlink_mesh() {
         gw::DownlinkFrame::decode(msg.get(1).cloned().unwrap()).unwrap()
     };
 
-    let down_item = down.items.get(0).unwrap();
+    let down_item = down.items.first().unwrap();
     let mesh_packet = packets::MeshPacket::from_slice(&down_item.phy_payload).unwrap();
 
     assert_eq!(
-        packets::MeshPacket {
-            mhdr: packets::MHDR {
-                payload_type: packets::PayloadType::Downlink,
-                hop_count: 1,
-            },
-            payload: packets::Payload::Downlink(packets::DownlinkPayload {
-                metadata: packets::DownlinkMetadata {
-                    uplink_id: 123,
-                    dr: 0,
-                    frequency: 868500000,
-                    tx_power: 1,
-                    delay: 3,
+        {
+            let mut packet = packets::MeshPacket {
+                mhdr: packets::MHDR {
+                    payload_type: packets::PayloadType::Downlink,
+                    hop_count: 1,
                 },
-                relay_id: [1, 2, 3, 4],
-                phy_payload: vec![9, 8, 7, 6],
-            })
+                payload: packets::Payload::Downlink(packets::DownlinkPayload {
+                    metadata: packets::DownlinkMetadata {
+                        uplink_id: 123,
+                        dr: 0,
+                        frequency: 868500000,
+                        tx_power: 1,
+                        delay: 3,
+                    },
+                    relay_id: [1, 2, 3, 4],
+                    phy_payload: vec![9, 8, 7, 6],
+                }),
+                mic: None,
+            };
+            packet.set_mic(Aes128Key::null()).unwrap();
+            packet
         },
         mesh_packet
     );

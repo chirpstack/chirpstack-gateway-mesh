@@ -6,6 +6,8 @@ use once_cell::sync::OnceCell;
 use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
+use crate::aes128::Aes128Key;
+
 static CONFIG: OnceCell<Mutex<Arc<Configuration>>> = OnceCell::new();
 
 #[derive(Serialize, Deserialize, Default)]
@@ -48,6 +50,7 @@ impl Default for Logging {
 #[derive(Serialize, Deserialize)]
 #[serde(default)]
 pub struct Mesh {
+    pub signing_key: Aes128Key,
     pub frequencies: Vec<u32>,
     pub data_rate: DataRate,
     pub tx_power: i32,
@@ -61,6 +64,7 @@ pub struct Mesh {
 impl Default for Mesh {
     fn default() -> Self {
         Mesh {
+            signing_key: Aes128Key::null(),
             frequencies: vec![868100000, 868300000, 868500000],
             data_rate: DataRate {
                 modulation: Modulation::LORA,

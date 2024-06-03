@@ -5,6 +5,7 @@ use chirpstack_api::gw;
 use chirpstack_api::prost::Message;
 use zeromq::{SocketRecv, SocketSend};
 
+use chirpstack_gateway_mesh::aes128::Aes128Key;
 use chirpstack_gateway_mesh::{mesh, packets};
 
 mod common;
@@ -20,7 +21,7 @@ async fn test_relay_gateway_downlink_lora() {
 
     let uplink_id = mesh::store_uplink_context(&[5, 4, 3, 2, 1]);
 
-    let down_packet = packets::MeshPacket {
+    let mut down_packet = packets::MeshPacket {
         mhdr: packets::MHDR {
             payload_type: packets::PayloadType::Downlink,
             hop_count: 1,
@@ -36,7 +37,9 @@ async fn test_relay_gateway_downlink_lora() {
             relay_id: [2, 2, 2, 2],
             phy_payload: vec![9, 8, 7, 6, 5],
         }),
+        mic: None,
     };
+    down_packet.set_mic(Aes128Key::null()).unwrap();
 
     // The packet that we received from the Border Gateway that must be relayed to
     // the End Device.

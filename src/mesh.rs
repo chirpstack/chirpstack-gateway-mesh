@@ -36,7 +36,12 @@ pub async fn handle_uplink(border_gateway: bool, pl: gw::UplinkFrame) -> Result<
 
 // Handle Proprietary LoRaWAN payload (mesh encapsulated).
 pub async fn handle_mesh(border_gateway: bool, pl: gw::UplinkFrame) -> Result<()> {
+    let conf = config::get();
     let packet = MeshPacket::from_slice(&pl.phy_payload)?;
+    if !packet.validate_mic(conf.mesh.signing_key)? {
+        warn!("Dropping packet, invalid MIC, mesh_packet: {}", packet);
+        return Ok(());
+    }
 
     // If we can't add the packet to the cache, it means we have already seen the packet and we can
     // drop it.
@@ -205,6 +210,7 @@ async fn relay_mesh_packet(_: &gw::UplinkFrame, mut packet: MeshPacket) -> Resul
 
     // Increment hop count.
     packet.mhdr.hop_count += 1;
+    packet.set_mic(conf.mesh.signing_key)?;
 
     if packet.mhdr.hop_count > conf.mesh.max_hop_count {
         return Err(anyhow!("Max hop count exceeded"));
@@ -256,7 +262,7 @@ async fn relay_uplink_lora_packet(pl: &gw::UplinkFrame) -> Result<()> {
         .as_ref()
         .ok_or_else(|| anyhow!("modulation is None"))?;
 
-    let packet = MeshPacket {
+    let mut packet = MeshPacket {
         mhdr: MHDR {
             payload_type: PayloadType::Uplink,
             hop_count: 1,
@@ -272,7 +278,9 @@ async fn relay_uplink_lora_packet(pl: &gw::UplinkFrame) -> Result<()> {
             relay_id: backend::get_relay_id().await?,
             phy_payload: pl.phy_payload.clone(),
         }),
+        mic: None,
     };
+    packet.set_mic(conf.mesh.signing_key)?;
 
     let pl = gw::DownlinkFrame {
         downlink_id: random(),
@@ -345,7 +353,7 @@ async fn relay_downlink_lora_packet(pl: &gw::DownlinkFrame) -> Result<gw::Downli
             .get(CTX_PREFIX.len()..CTX_PREFIX.len() + 6)
             .ok_or_else(|| anyhow!("context does not contain enough bytes"))?;
 
-        let packet = packets::MeshPacket {
+        let mut packet = packets::MeshPacket {
             mhdr: packets::MHDR {
                 payload_type: packets::PayloadType::Downlink,
                 hop_count: 1,
@@ -369,7 +377,9 @@ async fn relay_downlink_lora_packet(pl: &gw::DownlinkFrame) -> Result<gw::Downli
                     delay,
                 },
             }),
+            mic: None,
         };
+        packet.set_mic(conf.mesh.signing_key)?;
 
         let pl = gw::DownlinkFrame {
             downlink_id: pl.downlink_id,

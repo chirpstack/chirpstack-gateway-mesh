@@ -1,6 +1,7 @@
 #[macro_use]
 extern crate anyhow;
 
+pub mod aes128;
 pub mod backend;
 pub mod cache;
 pub mod cmd;

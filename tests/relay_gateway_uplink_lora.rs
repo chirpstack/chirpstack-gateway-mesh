@@ -6,6 +6,8 @@ use chirpstack_api::prost::Message;
 use chirpstack_gateway_mesh::packets;
 use zeromq::{SocketRecv, SocketSend};
 
+use chirpstack_gateway_mesh::aes128::Aes128Key;
+
 mod common;
 
 /*
@@ -76,22 +78,27 @@ async fn test_relay_gateway_uplink_lora() {
     let mesh_packet = packets::MeshPacket::from_slice(&down_item.phy_payload).unwrap();
 
     assert_eq!(
-        packets::MeshPacket {
-            mhdr: packets::MHDR {
-                payload_type: packets::PayloadType::Uplink,
-                hop_count: 1,
-            },
-            payload: packets::Payload::Uplink(packets::UplinkPayload {
-                metadata: packets::UplinkMetadata {
-                    uplink_id: 1,
-                    dr: 0,
-                    rssi: -60,
-                    snr: 12,
-                    channel: 1,
+        {
+            let mut packet = packets::MeshPacket {
+                mhdr: packets::MHDR {
+                    payload_type: packets::PayloadType::Uplink,
+                    hop_count: 1,
                 },
-                relay_id: [2, 2, 2, 2],
-                phy_payload: vec![1, 2, 3, 4, 5, 6, 7, 8],
-            }),
+                payload: packets::Payload::Uplink(packets::UplinkPayload {
+                    metadata: packets::UplinkMetadata {
+                        uplink_id: 1,
+                        dr: 0,
+                        rssi: -60,
+                        snr: 12,
+                        channel: 1,
+                    },
+                    relay_id: [2, 2, 2, 2],
+                    phy_payload: vec![1, 2, 3, 4, 5, 6, 7, 8],
+                }),
+                mic: None,
+            };
+            packet.set_mic(Aes128Key::null()).unwrap();
+            packet
         },
         mesh_packet
     );

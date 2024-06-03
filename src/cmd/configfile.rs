@@ -25,6 +25,11 @@ pub fn run() {
 
 # Mesh configuration.
 [mesh]
+  # Signing key (AES128, HEX encoded).
+  #
+  # This key is used to sign and validate each mesh packet. This key must be
+  # configured on every Border / Relay gateway equally.
+  signing_key="{{ mesh.signing_key }}"
 
   # Border Gateway.
   #

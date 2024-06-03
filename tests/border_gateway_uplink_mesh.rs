@@ -5,6 +5,7 @@ use chirpstack_api::gw;
 use chirpstack_api::prost::Message;
 use zeromq::{SocketRecv, SocketSend};
 
+use chirpstack_gateway_mesh::aes128::Aes128Key;
 use chirpstack_gateway_mesh::packets;
 
 mod common;
@@ -18,7 +19,7 @@ mod common;
 async fn test_border_gateway_uplink_mesh() {
     common::setup(true).await;
 
-    let packet = packets::MeshPacket {
+    let mut packet = packets::MeshPacket {
         mhdr: packets::MHDR {
             payload_type: packets::PayloadType::Uplink,
             hop_count: 1,
@@ -34,7 +35,9 @@ async fn test_border_gateway_uplink_mesh() {
             relay_id: [1, 2, 3, 4],
             phy_payload: vec![9, 8, 7, 6],
         }),
+        mic: None,
     };
+    packet.set_mic(Aes128Key::null()).unwrap();
 
     let up = gw::UplinkFrame {
         phy_payload: packet.to_vec().unwrap(),
