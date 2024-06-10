@@ -1,3 +1,4 @@
+use std::time::UNIX_EPOCH;
 use std::{collections::VecDeque, usize};
 
 use crate::packets;
@@ -37,6 +38,7 @@ impl<T> Cache<T> {
 pub struct PayloadCache {
     p_type: packets::PayloadType,
     uplink_id: u16,
+    timestamp: u32,
     relay_id: [u8; 4],
 }
 
@@ -49,11 +51,23 @@ impl From<&packets::MeshPacket> for PayloadCache {
                 p_type,
                 uplink_id: v.metadata.uplink_id,
                 relay_id: v.relay_id,
+                timestamp: 0,
             },
             packets::Payload::Downlink(v) => PayloadCache {
                 p_type,
                 uplink_id: v.metadata.uplink_id,
                 relay_id: v.relay_id,
+                timestamp: 0,
+            },
+            packets::Payload::Stats(v) => PayloadCache {
+                p_type,
+                uplink_id: 0,
+                relay_id: v.relay_id,
+                timestamp: v
+                    .timestamp
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs() as u32,
             },
         }
     }

@@ -126,6 +126,18 @@ pub async fn send_stats(pl: &gw::GatewayStats) -> Result<()> {
     Ok(())
 }
 
+pub async fn send_mesh_stats(pl: &gw::MeshStats) -> Result<()> {
+    info!("Sending mesh stats event");
+
+    let event_chan = EVENT_CHAN
+        .get()
+        .ok_or_else(|| anyhow!("EVENT_CHAN is not set"))?;
+
+    event_chan.send(("mesh_stats".to_string(), pl.encode_to_vec()))?;
+
+    Ok(())
+}
+
 async fn command_loop(mut command_rx: CommandChannel) {
     trace!("Starting command loop");
 

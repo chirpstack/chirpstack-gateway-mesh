@@ -16,7 +16,7 @@
     "usage",
     "derive",
   ] }
-  chirpstack_api = { version = "4.8", default-features = false }
+  chirpstack_api = { version = "4.9.0-test.1", default-features = false }
   lrwn_filters = { version = "4.7", features = ["serde"] }
   log = "0.4"
   simple_logger = "5.0"
@@ -24,6 +24,7 @@
   toml = "0.8"
   handlebars = "5.1"
   anyhow = "1.0"
+  humantime-serde = "1.1"
   serde = { version = "1.0", features = ["derive"] }
   tokio = { version = "1.37", features = [
     "macros",

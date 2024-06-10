@@ -54,9 +54,10 @@ pub async fn handle_mesh(border_gateway: bool, pl: gw::UplinkFrame) -> Result<()
     };
 
     match border_gateway {
-        // In this case we only care about proxy-ing relayed uplinks
+        // Proxy relayed uplink
         true => match packet.mhdr.payload_type {
             PayloadType::Uplink => proxy_uplink_mesh_packet(&pl, packet).await,
+            PayloadType::Stats => proxy_stats_mesh_packet(&pl, packet).await,
             _ => Ok(()),
         },
         false => relay_mesh_packet(&pl, packet).await,
@@ -151,11 +152,35 @@ async fn proxy_uplink_mesh_packet(pl: &gw::UplinkFrame, packet: MeshPacket) -> R
     proxy::send_uplink(&pl).await
 }
 
+async fn proxy_stats_mesh_packet(pl: &gw::UplinkFrame, packet: MeshPacket) -> Result<()> {
+    let mesh_pl = match &packet.payload {
+        Payload::Stats(v) => v,
+        _ => {
+            return Err(anyhow!("Expected Stats payload"));
+        }
+    };
+
+    info!(
+        "Unwrapping relay stats packet, uplink_id: {}, mesh_packet: {}",
+        pl.rx_info.as_ref().map(|v| v.uplink_id).unwrap_or_default(),
+        packet
+    );
+
+    let stats_pl = gw::MeshStats {
+        gateway_id: hex::encode(backend::get_gateway_id().await?),
+        relay_id: hex::encode(mesh_pl.relay_id),
+        relay_path: mesh_pl.relay_path.iter().map(hex::encode).collect(),
+        time: Some(mesh_pl.timestamp.into()),
+    };
+
+    proxy::send_mesh_stats(&stats_pl).await
+}
+
 async fn relay_mesh_packet(_: &gw::UplinkFrame, mut packet: MeshPacket) -> Result<()> {
     let conf = config::get();
     let relay_id = backend::get_relay_id().await?;
 
-    match &packet.payload {
+    match &mut packet.payload {
         packets::Payload::Uplink(pl) => {
             if pl.relay_id == relay_id {
                 trace!("Dropping packet as this relay was the sender");
@@ -203,6 +228,17 @@ async fn relay_mesh_packet(_: &gw::UplinkFrame, mut packet: MeshPacket) -> Resul
                 return helpers::tx_ack_to_err(&backend::send_downlink(&pl).await?);
             }
         }
+        packets::Payload::Stats(pl) => {
+            if pl.relay_id == relay_id {
+                trace!("Dropping packet as this relay was the sender");
+
+                // Drop the packet, as we are the sender.
+                return Ok(());
+            }
+
+            // Add our Relay ID to the path.
+            pl.relay_path.push(relay_id);
+        }
     }
 
     // In any other case, we increment the hop_count and re-transmit the mesh encapsulated
@@ -210,6 +246,9 @@ async fn relay_mesh_packet(_: &gw::UplinkFrame, mut packet: MeshPacket) -> Resul
 
     // Increment hop count.
     packet.mhdr.hop_count += 1;
+
+    // We need to re-set the MIC as we have changed the payload by incrementing
+    // the hop count (and in casee of stats, we have modified the Relay path).
     packet.set_mic(conf.mesh.signing_key)?;
 
     if packet.mhdr.hop_count > conf.mesh.max_hop_count {
@@ -429,7 +468,7 @@ async fn relay_downlink_lora_packet(pl: &gw::DownlinkFrame) -> Result<gw::Downli
     })
 }
 
-fn get_mesh_frequency(conf: &Configuration) -> Result<u32> {
+pub fn get_mesh_frequency(conf: &Configuration) -> Result<u32> {
     if conf.mesh.frequencies.is_empty() {
         return Err(anyhow!("No mesh frequencies are configured"));
     }

@@ -11,3 +11,4 @@ pub mod logging;
 pub mod mesh;
 pub mod packets;
 pub mod proxy;
+pub mod stats;

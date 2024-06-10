@@ -1,4 +1,5 @@
 use std::fmt;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use aes::Aes128;
 use anyhow::Result;
@@ -61,6 +62,7 @@ impl MeshPacket {
                 PayloadType::Downlink => {
                     Payload::Downlink(DownlinkPayload::from_slice(&b[1..len - 4])?)
                 }
+                PayloadType::Stats => Payload::Stats(StatsPayload::from_slice(&b[1..len - 4])?),
             },
             mic: Some(mic),
             mhdr,
@@ -72,6 +74,7 @@ impl MeshPacket {
         b.extend_from_slice(&match &self.payload {
             Payload::Uplink(v) => v.to_vec()?,
             Payload::Downlink(v) => v.to_vec()?,
+            Payload::Stats(v) => v.to_vec()?,
         });
 
         if let Some(mic) = self.mic {
@@ -88,6 +91,7 @@ impl MeshPacket {
         b.extend_from_slice(&match &self.payload {
             Payload::Uplink(v) => v.to_vec()?,
             Payload::Downlink(v) => v.to_vec()?,
+            Payload::Stats(v) => v.to_vec()?,
         });
 
         Ok(b)
@@ -146,6 +150,14 @@ impl fmt::Display for MeshPacket {
                 hex::encode(v.relay_id),
                 self.mic.map(hex::encode).unwrap_or_default(),
             ),
+            Payload::Stats(v) => write!(
+                f,
+                "[{:?} hop_count: {}, timestamp: {:?}, relay_id: {}]",
+                self.mhdr.payload_type,
+                self.mhdr.hop_count,
+                v.timestamp,
+                hex::encode(v.relay_id),
+            ),
         }
     }
 }
@@ -185,6 +197,7 @@ impl MHDR {
 pub enum PayloadType {
     Uplink,
     Downlink,
+    Stats,
 }
 
 impl PayloadType {
@@ -192,6 +205,7 @@ impl PayloadType {
         Ok(match b {
             0x00 => PayloadType::Uplink,
             0x01 => PayloadType::Downlink,
+            0x02 => PayloadType::Stats,
             _ => return Err(anyhow!("Unexpected PayloadType: {}", b)),
         })
     }
@@ -200,6 +214,7 @@ impl PayloadType {
         match self {
             PayloadType::Uplink => 0x00,
             PayloadType::Downlink => 0x01,
+            PayloadType::Stats => 0x02,
         }
     }
 }
@@ -208,6 +223,7 @@ impl PayloadType {
 pub enum Payload {
     Uplink(UplinkPayload),
     Downlink(DownlinkPayload),
+    Stats(StatsPayload),
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -395,6 +411,60 @@ impl DownlinkMetadata {
             freq_b[2],
             (self.tx_power << 4) | (self.delay - 1),
         ])
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct StatsPayload {
+    pub timestamp: SystemTime,
+    pub relay_id: [u8; 4],
+    pub relay_path: Vec<[u8; 4]>,
+}
+
+impl StatsPayload {
+    pub fn from_slice(b: &[u8]) -> Result<StatsPayload> {
+        if b.len() < 8 {
+            return Err(anyhow!("At least 8 bytes are expected"));
+        }
+
+        if (b.len() - 8) % 4 != 0 {
+            return Err(anyhow!("Invalid amoutn of Relay path bytes"));
+        }
+
+        let mut ts_b: [u8; 4] = [0; 4];
+        ts_b.copy_from_slice(&b[0..4]);
+        let timestamp = u32::from_be_bytes(ts_b);
+        let timestamp = UNIX_EPOCH
+            .checked_add(Duration::from_secs(timestamp.into()))
+            .ok_or_else(|| anyhow!("Invalid timestamp"))?;
+
+        let mut relay_id: [u8; 4] = [0; 4];
+        relay_id.copy_from_slice(&b[4..8]);
+
+        let relay_path: Vec<[u8; 4]> = b[8..]
+            .chunks(4)
+            .map(|v| {
+                let mut relay_id: [u8; 4] = [0; 4];
+                relay_id.copy_from_slice(v);
+                relay_id
+            })
+            .collect();
+
+        Ok(StatsPayload {
+            timestamp,
+            relay_id,
+            relay_path,
+        })
+    }
+
+    pub fn to_vec(&self) -> Result<Vec<u8>> {
+        let timestamp = self.timestamp.duration_since(UNIX_EPOCH)?.as_secs() as u32;
+        let mut b = timestamp.to_be_bytes().to_vec();
+        b.extend_from_slice(&self.relay_id);
+        for relay_path in &self.relay_path {
+            b.extend_from_slice(relay_path);
+        }
+        Ok(b)
     }
 }
 
@@ -886,6 +956,38 @@ mod test {
         let b = dn_pl.to_vec().unwrap();
         assert_eq!(
             vec![0x40, 0x03, 0x84, 0x76, 0x28, 0xff, 0x01, 0x02, 0x03, 0x04, 0x05,],
+            b
+        );
+    }
+
+    #[test]
+    fn test_stats_payload_from_slice() {
+        let b = vec![59, 154, 202, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+        let stats_pl = StatsPayload::from_slice(&b).unwrap();
+        assert_eq!(
+            StatsPayload {
+                timestamp: UNIX_EPOCH
+                    .checked_add(Duration::from_secs(1_000_000_000))
+                    .unwrap(),
+                relay_id: [1, 2, 3, 4],
+                relay_path: vec![[5, 6, 7, 8], [9, 10, 11, 12]],
+            },
+            stats_pl,
+        );
+    }
+
+    #[test]
+    fn test_stats_payload_to_vec() {
+        let stats_pl = StatsPayload {
+            timestamp: UNIX_EPOCH
+                .checked_add(Duration::from_secs(1_000_000_000))
+                .unwrap(),
+            relay_id: [1, 2, 3, 4],
+            relay_path: vec![[5, 6, 7, 8], [9, 10, 11, 12]],
+        };
+        let b = stats_pl.to_vec().unwrap();
+        assert_eq!(
+            vec![59, 154, 202, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
             b
         );
     }

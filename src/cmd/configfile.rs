@@ -38,6 +38,12 @@ pub fn run() {
   # uplinks and forward these to the proxy API, rather than relaying these.
   border_gateway={{ mesh.border_gateway }}
 
+  # Stats interval (Relay Gateway only).
+  #
+  # This defines the interval in which a Relay Gateway (border_gateway=false)
+  # will emit stats messages.
+  stats_interval="{{ mesh.stats_interval }}"
+
   # Max hop count.
   #
   # This defines the maximum number of hops a relayed payload will pass.

@@ -161,6 +161,7 @@ dependencies = [
  "futures",
  "handlebars",
  "hex",
+ "humantime-serde",
  "log",
  "lrwn_filters",
  "once_cell",
@@ -179,9 +180,9 @@ dependencies = [
 
 [[package]]
 name = "chirpstack_api"
-version = "4.8.1"
+version = "4.9.0-test.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "74e4ac52b7aabb481f0f05f7dfc6f66e61357ae705751b882bf688ab70bce54e"
+checksum = "ef50294bd90c389f76dcce5b7214adf48b92feef5b4b231d17d4fa3589fb8951"
 dependencies = [
  "hex",
  "pbjson-build",
@@ -600,6 +601,22 @@ dependencies = [
  "libc",
  "match_cfg",
  "winapi",
+]
+
+[[package]]
+name = "humantime"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9a3a5bfb195931eeb336b2a7b4d761daec841b97f947d34394601737a7bba5e4"
+
+[[package]]
+name = "humantime-serde"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "57a3db5ea5923d99402c94e9feb261dc5ee9b4efa158b0315f788cf549cc200c"
+dependencies = [
+ "humantime",
+ "serde",
 ]
 
 [[package]]

@@ -29,6 +29,7 @@ pub fn get_config(border_gateway: bool) -> Configuration {
     Configuration {
         mesh: config::Mesh {
             border_gateway,
+            stats_interval: Duration::ZERO,
             frequencies: vec![868100000],
             data_rate: config::DataRate {
                 modulation: config::Modulation::LORA,
