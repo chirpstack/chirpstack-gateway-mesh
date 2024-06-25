@@ -126,7 +126,7 @@ pub async fn send_stats(pl: &gw::GatewayStats) -> Result<()> {
     Ok(())
 }
 
-pub async fn send_mesh_heartbeat(pl: &gw::MeshStats) -> Result<()> {
+pub async fn send_mesh_heartbeat(pl: &gw::MeshHeartbeat) -> Result<()> {
     info!("Sending mesh heartbeat event");
 
     let event_chan = EVENT_CHAN

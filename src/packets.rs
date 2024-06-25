@@ -420,7 +420,7 @@ impl DownlinkMetadata {
 pub struct HeartbeatPayload {
     pub timestamp: SystemTime,
     pub relay_id: [u8; 4],
-    pub relay_path: Vec<[u8; 4]>,
+    pub relay_path: Vec<RelayPath>,
 }
 
 impl HeartbeatPayload {
@@ -429,8 +429,8 @@ impl HeartbeatPayload {
             return Err(anyhow!("At least 8 bytes are expected"));
         }
 
-        if (b.len() - 8) % 4 != 0 {
-            return Err(anyhow!("Invalid amoutn of Relay path bytes"));
+        if (b.len() - 8) % 6 != 0 {
+            return Err(anyhow!("Invalid amount of Relay path bytes"));
         }
 
         let mut ts_b: [u8; 4] = [0; 4];
@@ -443,12 +443,12 @@ impl HeartbeatPayload {
         let mut relay_id: [u8; 4] = [0; 4];
         relay_id.copy_from_slice(&b[4..8]);
 
-        let relay_path: Vec<[u8; 4]> = b[8..]
-            .chunks(4)
+        let relay_path: Vec<RelayPath> = b[8..]
+            .chunks(6)
             .map(|v| {
-                let mut relay_id: [u8; 4] = [0; 4];
-                relay_id.copy_from_slice(v);
-                relay_id
+                let mut b: [u8; 6] = [0; 6];
+                b.copy_from_slice(v);
+                RelayPath::from_bytes(b)
             })
             .collect();
 
@@ -464,9 +464,64 @@ impl HeartbeatPayload {
         let mut b = timestamp.to_be_bytes().to_vec();
         b.extend_from_slice(&self.relay_id);
         for relay_path in &self.relay_path {
-            b.extend_from_slice(relay_path);
+            b.extend_from_slice(&relay_path.to_bytes()?);
         }
         Ok(b)
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct RelayPath {
+    pub relay_id: [u8; 4],
+    pub rssi: i16,
+    pub snr: i8,
+}
+
+impl RelayPath {
+    pub fn from_bytes(b: [u8; 6]) -> Self {
+        let mut relay_id = [0; 4];
+        relay_id.copy_from_slice(&b[0..4]);
+
+        let snr = b[5] & 0x3f;
+        let snr = if snr > 31 {
+            (snr as i8) - 64
+        } else {
+            snr as i8
+        };
+
+        RelayPath {
+            relay_id,
+            snr,
+            rssi: -(b[4] as i16),
+        }
+    }
+
+    pub fn to_bytes(&self) -> Result<[u8; 6]> {
+        if self.rssi > 0 {
+            return Err(anyhow!("Max rssi value is 0"));
+        }
+        if self.rssi < -255 {
+            return Err(anyhow!("Min rssi value is -255"));
+        }
+        if self.snr < -32 {
+            return Err(anyhow!("Min snr value is -32"));
+        }
+        if self.snr > 31 {
+            return Err(anyhow!("Max snr value is 31"));
+        }
+
+        Ok([
+            self.relay_id[0],
+            self.relay_id[1],
+            self.relay_id[2],
+            self.relay_id[3],
+            -self.rssi as u8,
+            if self.snr < 0 {
+                (self.snr + 64) as u8
+            } else {
+                self.snr as u8
+            },
+        ])
     }
 }
 
@@ -964,7 +1019,9 @@ mod test {
 
     #[test]
     fn test_heartbeat_payload_from_slice() {
-        let b = vec![59, 154, 202, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+        let b = vec![
+            59, 154, 202, 0, 1, 2, 3, 4, 5, 6, 7, 8, 120, 52, 9, 10, 11, 12, 120, 52,
+        ];
         let heartbeat_pl = HeartbeatPayload::from_slice(&b).unwrap();
         assert_eq!(
             HeartbeatPayload {
@@ -972,7 +1029,18 @@ mod test {
                     .checked_add(Duration::from_secs(1_000_000_000))
                     .unwrap(),
                 relay_id: [1, 2, 3, 4],
-                relay_path: vec![[5, 6, 7, 8], [9, 10, 11, 12]],
+                relay_path: vec![
+                    RelayPath {
+                        relay_id: [5, 6, 7, 8],
+                        rssi: -120,
+                        snr: -12,
+                    },
+                    RelayPath {
+                        relay_id: [9, 10, 11, 12],
+                        rssi: -120,
+                        snr: -12,
+                    },
+                ],
             },
             heartbeat_pl,
         );
@@ -985,11 +1053,22 @@ mod test {
                 .checked_add(Duration::from_secs(1_000_000_000))
                 .unwrap(),
             relay_id: [1, 2, 3, 4],
-            relay_path: vec![[5, 6, 7, 8], [9, 10, 11, 12]],
+            relay_path: vec![
+                RelayPath {
+                    relay_id: [5, 6, 7, 8],
+                    rssi: -120,
+                    snr: -12,
+                },
+                RelayPath {
+                    relay_id: [9, 10, 11, 12],
+                    rssi: -120,
+                    snr: -12,
+                },
+            ],
         };
         let b = heartbeat_pl.to_vec().unwrap();
         assert_eq!(
-            vec![59, 154, 202, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+            vec![59, 154, 202, 0, 1, 2, 3, 4, 5, 6, 7, 8, 120, 52, 9, 10, 11, 12, 120, 52],
             b
         );
     }

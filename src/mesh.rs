@@ -166,19 +166,31 @@ async fn proxy_heartbeat_mesh_packet(pl: &gw::UplinkFrame, packet: MeshPacket) -
         packet
     );
 
-    let heartbeat_pl = gw::MeshStats {
+    let heartbeat_pl = gw::MeshHeartbeat {
         gateway_id: hex::encode(backend::get_gateway_id().await?),
         relay_id: hex::encode(mesh_pl.relay_id),
-        relay_path: mesh_pl.relay_path.iter().map(hex::encode).collect(),
+        relay_path: mesh_pl
+            .relay_path
+            .iter()
+            .map(|v| gw::MeshHeartbeatRelayPath {
+                relay_id: hex::encode(&v.relay_id),
+                rssi: v.rssi.into(),
+                snr: v.snr.into(),
+            })
+            .collect(),
         time: Some(mesh_pl.timestamp.into()),
     };
 
     proxy::send_mesh_heartbeat(&heartbeat_pl).await
 }
 
-async fn relay_mesh_packet(_: &gw::UplinkFrame, mut packet: MeshPacket) -> Result<()> {
+async fn relay_mesh_packet(pl: &gw::UplinkFrame, mut packet: MeshPacket) -> Result<()> {
     let conf = config::get();
     let relay_id = backend::get_relay_id().await?;
+    let rx_info = pl
+        .rx_info
+        .as_ref()
+        .ok_or_else(|| anyhow!("rx_info is None"))?;
 
     match &mut packet.payload {
         packets::Payload::Uplink(pl) => {
@@ -237,7 +249,11 @@ async fn relay_mesh_packet(_: &gw::UplinkFrame, mut packet: MeshPacket) -> Resul
             }
 
             // Add our Relay ID to the path.
-            pl.relay_path.push(relay_id);
+            pl.relay_path.push(packets::RelayPath {
+                relay_id,
+                rssi: rx_info.rssi as i16,
+                snr: rx_info.snr as i8,
+            });
         }
     }
 

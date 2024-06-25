@@ -95,7 +95,11 @@ async fn test_relay_gateway_relay_mesh_heartbeat() {
 
     packet.mhdr.hop_count += 1;
     if let packets::Payload::Heartbeat(v) = &mut packet.payload {
-        v.relay_path.push([2, 2, 2, 2]);
+        v.relay_path.push(packets::RelayPath {
+            relay_id: [2, 2, 2, 2],
+            rssi: -60,
+            snr: 12,
+        });
     }
     packet.set_mic(Aes128Key::null()).unwrap();
 
