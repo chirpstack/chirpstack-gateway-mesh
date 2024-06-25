@@ -53,7 +53,7 @@ impl Default for Logging {
 pub struct Mesh {
     pub signing_key: Aes128Key,
     #[serde(with = "humantime_serde")]
-    pub stats_interval: Duration,
+    pub heartbeat_interval: Duration,
     pub frequencies: Vec<u32>,
     pub data_rate: DataRate,
     pub tx_power: i32,
@@ -68,7 +68,7 @@ impl Default for Mesh {
     fn default() -> Self {
         Mesh {
             signing_key: Aes128Key::null(),
-            stats_interval: Duration::from_secs(300),
+            heartbeat_interval: Duration::from_secs(300),
             frequencies: vec![868100000, 868300000, 868500000],
             data_rate: DataRate {
                 modulation: Modulation::LORA,

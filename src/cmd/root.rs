@@ -4,12 +4,12 @@ use signal_hook::consts::signal::*;
 use signal_hook_tokio::Signals;
 
 use crate::config::Configuration;
-use crate::{backend, proxy, stats};
+use crate::{backend, heartbeat, proxy};
 
 pub async fn run(conf: &Configuration) -> Result<()> {
     proxy::setup(conf).await?;
     backend::setup(conf).await?;
-    stats::setup(conf).await?;
+    heartbeat::setup(conf).await?;
 
     let mut signals = Signals::new([SIGINT, SIGTERM])?;
     let handle = signals.handle();

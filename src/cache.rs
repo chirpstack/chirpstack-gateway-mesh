@@ -59,7 +59,7 @@ impl From<&packets::MeshPacket> for PayloadCache {
                 relay_id: v.relay_id,
                 timestamp: 0,
             },
-            packets::Payload::Stats(v) => PayloadCache {
+            packets::Payload::Heartbeat(v) => PayloadCache {
                 p_type,
                 uplink_id: 0,
                 relay_id: v.relay_id,

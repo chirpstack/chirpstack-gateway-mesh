@@ -8,19 +8,19 @@ use chirpstack_api::prost::Message;
 use chirpstack_gateway_mesh::packets;
 use zeromq::SocketRecv;
 
-use chirpstack_gateway_mesh::stats;
+use chirpstack_gateway_mesh::heartbeat;
 
 mod common;
 
 /*
-    This tests the scenario when the Relay Gateway sends its periodic stats.
+    This tests the scenario when the Relay Gateway sends its periodic heartbeat.
 */
 #[tokio::test]
-async fn test_relay_gateway_mesh_stats() {
+async fn test_relay_gateway_mesh_heartbeat() {
     common::setup(false).await;
-    let _ = stats::report_stats().await;
+    let _ = heartbeat::report_heartbeat().await;
 
-    // We expect the stats to be received by the mesh concentratord as
+    // We expect the heartbeat to be received by the mesh concentratord as
     // a downlink frame.
     let down: gw::DownlinkFrame = {
         let mut cmd_sock = common::MESH_BACKEND_COMMAND_SOCK
@@ -41,7 +41,7 @@ async fn test_relay_gateway_mesh_stats() {
     assert_ne!([0, 0, 0, 0], mesh_packet.mic.unwrap());
     mesh_packet.mic = None;
 
-    if let packets::Payload::Stats(v) = &mut mesh_packet.payload {
+    if let packets::Payload::Heartbeat(v) = &mut mesh_packet.payload {
         // Assert the time is ~ now()
         assert!(
             SystemTime::now()
@@ -55,10 +55,10 @@ async fn test_relay_gateway_mesh_stats() {
     assert_eq!(
         packets::MeshPacket {
             mhdr: packets::MHDR {
-                payload_type: packets::PayloadType::Stats,
+                payload_type: packets::PayloadType::Heartbeat,
                 hop_count: 1,
             },
-            payload: packets::Payload::Stats(packets::StatsPayload {
+            payload: packets::Payload::Heartbeat(packets::HeartbeatPayload {
                 relay_id: [2, 2, 2, 2],
                 timestamp: UNIX_EPOCH,
                 relay_path: vec![],

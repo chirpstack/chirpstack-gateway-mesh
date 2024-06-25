@@ -13,19 +13,19 @@ use chirpstack_gateway_mesh::packets;
 mod common;
 
 /*
-    Thsi tests the scenario that the Border Gateway receives a mesh stats
+    Thsi tests the scenario that the Border Gateway receives a mesh heartbeat
     packet. The Border Gateway will forward this to the Forwarder application.
 */
 #[tokio::test]
-async fn test_border_gateway_mesh_stats() {
+async fn test_border_gateway_mesh_heartbeat() {
     common::setup(true).await;
 
     let mut packet = packets::MeshPacket {
         mhdr: packets::MHDR {
-            payload_type: packets::PayloadType::Stats,
+            payload_type: packets::PayloadType::Heartbeat,
             hop_count: 1,
         },
-        payload: packets::Payload::Stats(packets::StatsPayload {
+        payload: packets::Payload::Heartbeat(packets::HeartbeatPayload {
             relay_id: [2, 2, 2, 2],
             timestamp: UNIX_EPOCH,
             relay_path: vec![[1, 2, 3, 4], [5, 6, 7, 8]],
@@ -76,7 +76,7 @@ async fn test_border_gateway_mesh_stats() {
         let msg = event_sock.recv().await.unwrap();
 
         let cmd = String::from_utf8(msg.get(0).map(|v| v.to_vec()).unwrap()).unwrap();
-        assert_eq!("mesh_stats", cmd);
+        assert_eq!("mesh_heartbeat", cmd);
 
         gw::MeshStats::decode(msg.get(1).cloned().unwrap()).unwrap()
     };

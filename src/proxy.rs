@@ -126,14 +126,14 @@ pub async fn send_stats(pl: &gw::GatewayStats) -> Result<()> {
     Ok(())
 }
 
-pub async fn send_mesh_stats(pl: &gw::MeshStats) -> Result<()> {
-    info!("Sending mesh stats event");
+pub async fn send_mesh_heartbeat(pl: &gw::MeshStats) -> Result<()> {
+    info!("Sending mesh heartbeat event");
 
     let event_chan = EVENT_CHAN
         .get()
         .ok_or_else(|| anyhow!("EVENT_CHAN is not set"))?;
 
-    event_chan.send(("mesh_stats".to_string(), pl.encode_to_vec()))?;
+    event_chan.send(("mesh_heartbeat".to_string(), pl.encode_to_vec()))?;
 
     Ok(())
 }

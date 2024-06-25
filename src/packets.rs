@@ -62,7 +62,9 @@ impl MeshPacket {
                 PayloadType::Downlink => {
                     Payload::Downlink(DownlinkPayload::from_slice(&b[1..len - 4])?)
                 }
-                PayloadType::Stats => Payload::Stats(StatsPayload::from_slice(&b[1..len - 4])?),
+                PayloadType::Heartbeat => {
+                    Payload::Heartbeat(HeartbeatPayload::from_slice(&b[1..len - 4])?)
+                }
             },
             mic: Some(mic),
             mhdr,
@@ -74,7 +76,7 @@ impl MeshPacket {
         b.extend_from_slice(&match &self.payload {
             Payload::Uplink(v) => v.to_vec()?,
             Payload::Downlink(v) => v.to_vec()?,
-            Payload::Stats(v) => v.to_vec()?,
+            Payload::Heartbeat(v) => v.to_vec()?,
         });
 
         if let Some(mic) = self.mic {
@@ -91,7 +93,7 @@ impl MeshPacket {
         b.extend_from_slice(&match &self.payload {
             Payload::Uplink(v) => v.to_vec()?,
             Payload::Downlink(v) => v.to_vec()?,
-            Payload::Stats(v) => v.to_vec()?,
+            Payload::Heartbeat(v) => v.to_vec()?,
         });
 
         Ok(b)
@@ -150,7 +152,7 @@ impl fmt::Display for MeshPacket {
                 hex::encode(v.relay_id),
                 self.mic.map(hex::encode).unwrap_or_default(),
             ),
-            Payload::Stats(v) => write!(
+            Payload::Heartbeat(v) => write!(
                 f,
                 "[{:?} hop_count: {}, timestamp: {:?}, relay_id: {}]",
                 self.mhdr.payload_type,
@@ -197,7 +199,7 @@ impl MHDR {
 pub enum PayloadType {
     Uplink,
     Downlink,
-    Stats,
+    Heartbeat,
 }
 
 impl PayloadType {
@@ -205,7 +207,7 @@ impl PayloadType {
         Ok(match b {
             0x00 => PayloadType::Uplink,
             0x01 => PayloadType::Downlink,
-            0x02 => PayloadType::Stats,
+            0x02 => PayloadType::Heartbeat,
             _ => return Err(anyhow!("Unexpected PayloadType: {}", b)),
         })
     }
@@ -214,7 +216,7 @@ impl PayloadType {
         match self {
             PayloadType::Uplink => 0x00,
             PayloadType::Downlink => 0x01,
-            PayloadType::Stats => 0x02,
+            PayloadType::Heartbeat => 0x02,
         }
     }
 }
@@ -223,7 +225,7 @@ impl PayloadType {
 pub enum Payload {
     Uplink(UplinkPayload),
     Downlink(DownlinkPayload),
-    Stats(StatsPayload),
+    Heartbeat(HeartbeatPayload),
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -415,14 +417,14 @@ impl DownlinkMetadata {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct StatsPayload {
+pub struct HeartbeatPayload {
     pub timestamp: SystemTime,
     pub relay_id: [u8; 4],
     pub relay_path: Vec<[u8; 4]>,
 }
 
-impl StatsPayload {
-    pub fn from_slice(b: &[u8]) -> Result<StatsPayload> {
+impl HeartbeatPayload {
+    pub fn from_slice(b: &[u8]) -> Result<HeartbeatPayload> {
         if b.len() < 8 {
             return Err(anyhow!("At least 8 bytes are expected"));
         }
@@ -450,7 +452,7 @@ impl StatsPayload {
             })
             .collect();
 
-        Ok(StatsPayload {
+        Ok(HeartbeatPayload {
             timestamp,
             relay_id,
             relay_path,
@@ -961,31 +963,31 @@ mod test {
     }
 
     #[test]
-    fn test_stats_payload_from_slice() {
+    fn test_heartbeat_payload_from_slice() {
         let b = vec![59, 154, 202, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
-        let stats_pl = StatsPayload::from_slice(&b).unwrap();
+        let heartbeat_pl = HeartbeatPayload::from_slice(&b).unwrap();
         assert_eq!(
-            StatsPayload {
+            HeartbeatPayload {
                 timestamp: UNIX_EPOCH
                     .checked_add(Duration::from_secs(1_000_000_000))
                     .unwrap(),
                 relay_id: [1, 2, 3, 4],
                 relay_path: vec![[5, 6, 7, 8], [9, 10, 11, 12]],
             },
-            stats_pl,
+            heartbeat_pl,
         );
     }
 
     #[test]
-    fn test_stats_payload_to_vec() {
-        let stats_pl = StatsPayload {
+    fn test_heartbeat_payload_to_vec() {
+        let heartbeat_pl = HeartbeatPayload {
             timestamp: UNIX_EPOCH
                 .checked_add(Duration::from_secs(1_000_000_000))
                 .unwrap(),
             relay_id: [1, 2, 3, 4],
             relay_path: vec![[5, 6, 7, 8], [9, 10, 11, 12]],
         };
-        let b = stats_pl.to_vec().unwrap();
+        let b = heartbeat_pl.to_vec().unwrap();
         assert_eq!(
             vec![59, 154, 202, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
             b

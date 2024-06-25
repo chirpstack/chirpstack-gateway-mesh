@@ -13,26 +13,26 @@ use crate::mesh::get_mesh_frequency;
 use crate::packets;
 
 pub async fn setup(conf: &Configuration) -> Result<()> {
-    // Only Relay gatewways need to report stats as the Border Gateway is already internet
+    // Only Relay gatewways need to report heartbeat as the Border Gateway is already internet
     // connected and reports status through the Concentratord.
-    if conf.mesh.border_gateway || conf.mesh.stats_interval.is_zero() {
+    if conf.mesh.border_gateway || conf.mesh.heartbeat_interval.is_zero() {
         return Ok(());
     }
 
     info!(
-        "Starting stats loop, stats_interval: {:?}",
-        conf.mesh.stats_interval
+        "Starting heartbeat loop, heartbeat_interval: {:?}",
+        conf.mesh.heartbeat_interval
     );
 
     tokio::spawn({
-        let stats_interval = conf.mesh.stats_interval;
+        let heartbeat_interval = conf.mesh.heartbeat_interval;
 
         async move {
             loop {
-                if let Err(e) = report_stats().await {
-                    error!("Report stats error, error: {}", e);
+                if let Err(e) = report_heartbeat().await {
+                    error!("Report heartbeat error, error: {}", e);
                 }
-                sleep(stats_interval).await;
+                sleep(heartbeat_interval).await;
             }
         }
     });
@@ -40,15 +40,15 @@ pub async fn setup(conf: &Configuration) -> Result<()> {
     Ok(())
 }
 
-pub async fn report_stats() -> Result<()> {
+pub async fn report_heartbeat() -> Result<()> {
     let conf = config::get();
 
     let mut packet = packets::MeshPacket {
         mhdr: packets::MHDR {
-            payload_type: packets::PayloadType::Stats,
+            payload_type: packets::PayloadType::Heartbeat,
             hop_count: 1,
         },
-        payload: packets::Payload::Stats(packets::StatsPayload {
+        payload: packets::Payload::Heartbeat(packets::HeartbeatPayload {
             timestamp: SystemTime::now(),
             relay_id: backend::get_relay_id().await.unwrap_or_default(),
             relay_path: vec![],
@@ -81,7 +81,7 @@ pub async fn report_stats() -> Result<()> {
     };
 
     info!(
-        "Sending stats packet, downlink_id: {}, mesh_packet: {}",
+        "Sending heartbeat packet, downlink_id: {}, mesh_packet: {}",
         pl.downlink_id, packet
     );
     backend::mesh(&pl).await

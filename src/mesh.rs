@@ -57,7 +57,7 @@ pub async fn handle_mesh(border_gateway: bool, pl: gw::UplinkFrame) -> Result<()
         // Proxy relayed uplink
         true => match packet.mhdr.payload_type {
             PayloadType::Uplink => proxy_uplink_mesh_packet(&pl, packet).await,
-            PayloadType::Stats => proxy_stats_mesh_packet(&pl, packet).await,
+            PayloadType::Heartbeat => proxy_heartbeat_mesh_packet(&pl, packet).await,
             _ => Ok(()),
         },
         false => relay_mesh_packet(&pl, packet).await,
@@ -152,28 +152,28 @@ async fn proxy_uplink_mesh_packet(pl: &gw::UplinkFrame, packet: MeshPacket) -> R
     proxy::send_uplink(&pl).await
 }
 
-async fn proxy_stats_mesh_packet(pl: &gw::UplinkFrame, packet: MeshPacket) -> Result<()> {
+async fn proxy_heartbeat_mesh_packet(pl: &gw::UplinkFrame, packet: MeshPacket) -> Result<()> {
     let mesh_pl = match &packet.payload {
-        Payload::Stats(v) => v,
+        Payload::Heartbeat(v) => v,
         _ => {
-            return Err(anyhow!("Expected Stats payload"));
+            return Err(anyhow!("Expected Heartbeat payload"));
         }
     };
 
     info!(
-        "Unwrapping relay stats packet, uplink_id: {}, mesh_packet: {}",
+        "Unwrapping relay heartbeat packet, uplink_id: {}, mesh_packet: {}",
         pl.rx_info.as_ref().map(|v| v.uplink_id).unwrap_or_default(),
         packet
     );
 
-    let stats_pl = gw::MeshStats {
+    let heartbeat_pl = gw::MeshStats {
         gateway_id: hex::encode(backend::get_gateway_id().await?),
         relay_id: hex::encode(mesh_pl.relay_id),
         relay_path: mesh_pl.relay_path.iter().map(hex::encode).collect(),
         time: Some(mesh_pl.timestamp.into()),
     };
 
-    proxy::send_mesh_stats(&stats_pl).await
+    proxy::send_mesh_heartbeat(&heartbeat_pl).await
 }
 
 async fn relay_mesh_packet(_: &gw::UplinkFrame, mut packet: MeshPacket) -> Result<()> {
@@ -228,7 +228,7 @@ async fn relay_mesh_packet(_: &gw::UplinkFrame, mut packet: MeshPacket) -> Resul
                 return helpers::tx_ack_to_err(&backend::send_downlink(&pl).await?);
             }
         }
-        packets::Payload::Stats(pl) => {
+        packets::Payload::Heartbeat(pl) => {
             if pl.relay_id == relay_id {
                 trace!("Dropping packet as this relay was the sender");
 
@@ -248,7 +248,7 @@ async fn relay_mesh_packet(_: &gw::UplinkFrame, mut packet: MeshPacket) -> Resul
     packet.mhdr.hop_count += 1;
 
     // We need to re-set the MIC as we have changed the payload by incrementing
-    // the hop count (and in casee of stats, we have modified the Relay path).
+    // the hop count (and in casee of heartbeat, we have modified the Relay path).
     packet.set_mic(conf.mesh.signing_key)?;
 
     if packet.mhdr.hop_count > conf.mesh.max_hop_count {

@@ -14,19 +14,19 @@ use chirpstack_gateway_mesh::aes128::Aes128Key;
 mod common;
 
 /*
-    This tests the scenario when the Relay Gateway receives a Mesh Stats packet.
+    This tests the scenario when the Relay Gateway receives a Mesh Heartbeat packet.
     In this case, the Relay Gateway must relay the payload.
 */
 #[tokio::test]
-async fn test_relay_gateway_relay_mesh_stats() {
+async fn test_relay_gateway_relay_mesh_heartbeat() {
     common::setup(false).await;
 
     let mut packet = packets::MeshPacket {
         mhdr: packets::MHDR {
-            payload_type: packets::PayloadType::Stats,
+            payload_type: packets::PayloadType::Heartbeat,
             hop_count: 1,
         },
-        payload: packets::Payload::Stats(packets::StatsPayload {
+        payload: packets::Payload::Heartbeat(packets::HeartbeatPayload {
             relay_id: [1, 2, 3, 4],
             timestamp: UNIX_EPOCH,
             relay_path: vec![],
@@ -94,7 +94,7 @@ async fn test_relay_gateway_relay_mesh_stats() {
     let mesh_packet = packets::Packet::from_slice(&down_item.phy_payload).unwrap();
 
     packet.mhdr.hop_count += 1;
-    if let packets::Payload::Stats(v) = &mut packet.payload {
+    if let packets::Payload::Heartbeat(v) = &mut packet.payload {
         v.relay_path.push([2, 2, 2, 2]);
     }
     packet.set_mic(Aes128Key::null()).unwrap();
