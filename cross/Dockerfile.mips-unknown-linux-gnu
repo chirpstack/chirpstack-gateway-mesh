@@ -1,4 +1,4 @@
-FROM ghcr.io/cross-rs/mips-unknown-linux-gnu:latest
+FROM ghcr.io/cross-rs/mips-unknown-linux-gnu:main
 
 RUN apt-get update && \
     apt-get --assume-yes install \
