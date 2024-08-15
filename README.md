@@ -1,24 +1,19 @@
-# ChirpStack Gateway Relay
+# ChirpStack Gateway Mesh
 
-**This project is work in progress!**
-
-ChirpStack Gateway Relay is a software component that can turn a LoRa<sup>&reg;</sup>
+ChirpStack Gateway Mesh is a software component that can turn a LoRa<sup>&reg;</sup>
 gateway into a relay. This makes it possible to extend the LoRa coverage, without
 the need to connect each LoRa gateway to the internet.
 
-The difference with the LoRa Alliance Relay protocol specification (TS011) is
-that this solution does not require any End Device modifications.
-
 ## Documentation and binaries
 
-Please refer to the [ChirpStack Gateway Relay](https://www.chirpstack.io/docs/chirpstack-gateway-relay/)
+Please refer to the [ChirpStack Gateway Mesh](https://www.chirpstack.io/docs/chirpstack-gateway-mesh/)
 for documentation and pre-compiled binaries.
 
 ## Building from source
 
 ### Requirements
 
-Building ChirpStack Gateway Relay requires:
+Building ChirpStack Gateway Mesh requires:
 
 * [Nix](https://nixos.org/download.html) (recommended) and
 * [Docker](https://www.docker.com/)
@@ -52,7 +47,7 @@ make test
 
 ### Compiling binaries
 
-Execute the following commands to build the ChirpStack Gateway Relay binaries and
+Execute the following commands to build the ChirpStack Gateway Mesh binaries and
 packages:
 
 ```bash
@@ -65,4 +60,4 @@ make dist
 
 ## License
 
-ChirpStack Gateway Relay is distributed under the MIT license. See also [LICENSE](https://github.com/brocaar/chirpstack-gateway-relay/blob/master/LICENSE).
+ChirpStack Gateway Mesh is distributed under the MIT license. See also [LICENSE](https://github.com/chirpstack/chirpstack-gateway-mesh/blob/master/LICENSE).
