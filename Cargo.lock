@@ -186,9 +186,9 @@ dependencies = [
 
 [[package]]
 name = "chirpstack_api"
-version = "4.9.0-test.6"
+version = "4.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a2d42f42a3ce39aa72105a95ec8f06934fdabdd2d07dc0fc9a3e71e93e2d65ac"
+checksum = "8579b83c434a3fb65c487d8d04cb974b2351a3f63eb5236d239289b2c81328e6"
 dependencies = [
  "hex",
  "pbjson-build",
@@ -699,9 +699,9 @@ checksum = "a7a70ba024b9dc04c27ea2f0c0548feb474ec5c54bba33a7f72f873a39d07b24"
 
 [[package]]
 name = "lrwn_filters"
-version = "4.7.0"
+version = "4.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "425e21a2cb14bfbdb8e7b84993c0fba5fe1b9dc2381c59dfbda3cbf28b4ef57d"
+checksum = "470ec7a1a238a47a5ed8b7a0f765ccb870b812dea76621c35b0bae1118b831cb"
 dependencies = [
  "hex",
  "serde",
@@ -1134,9 +1134,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.124"
+version = "1.0.125"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "66ad62847a56b3dba58cc891acd13884b9c61138d330c0d7b6181713d4fce38d"
+checksum = "83c8e735a073ccf5be70aa8066aa984eaf2fa000db6c8d0100ae605b366d31ed"
 dependencies = [
  "itoa",
  "memchr",
