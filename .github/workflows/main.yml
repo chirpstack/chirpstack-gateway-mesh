@@ -80,5 +80,5 @@ jobs:
       -
         name: Upload binaries to S3
         run: |
-          aws s3 sync dist s3://builds.loraserver.io/chirpstack-gateway-relay
+          aws s3 sync dist s3://builds.loraserver.io/chirpstack-gateway-mesh
         if: startsWith(github.ref, 'refs/tags/v')
