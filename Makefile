@@ -58,7 +58,7 @@ package-x86_64-unknown-linux-musl:
 	mkdir -p dist
 
 	# .tar.gz
-	tar -czvf dist/chirpstack-gateway-relay_$(PKG_VERSION)_amd64.tar.gz -C target/x86_64-unknown-linux-musl/release chirpstack-gateway-relay
+	tar -czvf dist/chirpstack-gateway-mesh_$(PKG_VERSION)_amd64.tar.gz -C target/x86_64-unknown-linux-musl/release chirpstack-gateway-mesh
 
 	# .deb
 	cargo deb --target x86_64-unknown-linux-musl --no-build --no-strip
@@ -69,7 +69,7 @@ package-aarch64-unknown-linux-musl:
 	mkdir -p dist
 
 	# .tar.gz
-	tar -czvf dist/chirpstack-gateway-relay_$(PKG_VERSION)_arm64.tar.gz -C target/aarch64-unknown-linux-musl/release chirpstack-gateway-relay
+	tar -czvf dist/chirpstack-gateway-mesh_$(PKG_VERSION)_arm64.tar.gz -C target/aarch64-unknown-linux-musl/release chirpstack-gateway-mesh
 
 	# .deb
 	cargo deb --target aarch64-unknown-linux-musl --no-build --no-strip
@@ -81,7 +81,7 @@ package-armv7-unknown-linux-musleabihf:
 	mkdir -p dist
 
 	# .tar.gz
-	tar -czvf dist/chirpstack-gateway-relay_$(PKG_VERSION)_armv7hf.tar.gz -C target/armv7-unknown-linux-musleabihf/release chirpstack-gateway-relay
+	tar -czvf dist/chirpstack-gateway-mesh_$(PKG_VERSION)_armv7hf.tar.gz -C target/armv7-unknown-linux-musleabihf/release chirpstack-gateway-mesh
 
 	# .deb
 	cargo deb --target armv7-unknown-linux-musleabihf --no-build --no-strip
