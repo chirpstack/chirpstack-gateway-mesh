@@ -1,9 +1,6 @@
 # Hidden files
 .*
-!.cargo
 !.github
-!.vscode
-!.env
 
 # Config files
 /chirpstack-gateway-relay.toml
