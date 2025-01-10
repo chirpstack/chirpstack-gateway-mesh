@@ -1,6 +1,6 @@
+use std::sync::OnceLock;
 use std::time::Duration;
 
-use once_cell::sync::OnceCell;
 use tokio::fs::remove_file;
 use tokio::sync::Mutex;
 use tokio::time::sleep;
@@ -8,14 +8,14 @@ use zeromq::{Socket, SocketRecv, SocketSend};
 
 use chirpstack_gateway_mesh::config::{self, Configuration};
 
-pub static FORWARDER_EVENT_SOCK: OnceCell<Mutex<zeromq::SubSocket>> = OnceCell::new();
-pub static FORWARDER_COMMAND_SOCK: OnceCell<Mutex<zeromq::ReqSocket>> = OnceCell::new();
+pub static FORWARDER_EVENT_SOCK: OnceLock<Mutex<zeromq::SubSocket>> = OnceLock::new();
+pub static FORWARDER_COMMAND_SOCK: OnceLock<Mutex<zeromq::ReqSocket>> = OnceLock::new();
 
-pub static BACKEND_EVENT_SOCK: OnceCell<Mutex<zeromq::PubSocket>> = OnceCell::new();
-pub static BACKEND_COMMAND_SOCK: OnceCell<Mutex<zeromq::RepSocket>> = OnceCell::new();
+pub static BACKEND_EVENT_SOCK: OnceLock<Mutex<zeromq::PubSocket>> = OnceLock::new();
+pub static BACKEND_COMMAND_SOCK: OnceLock<Mutex<zeromq::RepSocket>> = OnceLock::new();
 
-pub static MESH_BACKEND_EVENT_SOCK: OnceCell<Mutex<zeromq::PubSocket>> = OnceCell::new();
-pub static MESH_BACKEND_COMMAND_SOCK: OnceCell<Mutex<zeromq::RepSocket>> = OnceCell::new();
+pub static MESH_BACKEND_EVENT_SOCK: OnceLock<Mutex<zeromq::PubSocket>> = OnceLock::new();
+pub static MESH_BACKEND_COMMAND_SOCK: OnceLock<Mutex<zeromq::RepSocket>> = OnceLock::new();
 
 pub async fn setup(border_gateway: bool) {
     let conf = get_config(border_gateway);
@@ -87,7 +87,7 @@ async fn init_forwarder(border_gateway: bool) {
 
     FORWARDER_EVENT_SOCK
         .set(Mutex::new(event_sock))
-        .map_err(|_| anyhow!("OnceCell error"))
+        .map_err(|_| anyhow!("OnceLock error"))
         .unwrap();
 
     let mut cmd_sock = zeromq::ReqSocket::new();
@@ -98,7 +98,7 @@ async fn init_forwarder(border_gateway: bool) {
 
     FORWARDER_COMMAND_SOCK
         .set(Mutex::new(cmd_sock))
-        .map_err(|_| anyhow!("OnceCell error"))
+        .map_err(|_| anyhow!("OnceLock error"))
         .unwrap();
 
     sleep(Duration::from_millis(100)).await;
@@ -116,7 +116,7 @@ async fn init_backend(border_gateway: bool) {
 
     BACKEND_EVENT_SOCK
         .set(Mutex::new(event_sock))
-        .map_err(|_| anyhow!("OnceCell error"))
+        .map_err(|_| anyhow!("OnceLock error"))
         .unwrap();
 
     let mut cmd_sock = zeromq::RepSocket::new();
@@ -128,7 +128,7 @@ async fn init_backend(border_gateway: bool) {
 
     BACKEND_COMMAND_SOCK
         .set(Mutex::new(cmd_sock))
-        .map_err(|_| anyhow!("OnceCell error"))
+        .map_err(|_| anyhow!("OnceLock error"))
         .unwrap();
 
     let mut event_sock = zeromq::PubSocket::new();
@@ -140,7 +140,7 @@ async fn init_backend(border_gateway: bool) {
 
     MESH_BACKEND_EVENT_SOCK
         .set(Mutex::new(event_sock))
-        .map_err(|_| anyhow!("OnceCell error"))
+        .map_err(|_| anyhow!("OnceLock error"))
         .unwrap();
 
     let mut cmd_sock = zeromq::RepSocket::new();
@@ -152,7 +152,7 @@ async fn init_backend(border_gateway: bool) {
 
     MESH_BACKEND_COMMAND_SOCK
         .set(Mutex::new(cmd_sock))
-        .map_err(|_| anyhow!("OnceCell error"))
+        .map_err(|_| anyhow!("OnceLock error"))
         .unwrap();
 
     sleep(Duration::from_millis(300)).await;

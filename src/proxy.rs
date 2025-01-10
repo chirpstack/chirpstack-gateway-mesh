@@ -1,10 +1,10 @@
+use std::sync::OnceLock;
 use std::thread;
 
 use anyhow::Result;
 use chirpstack_api::gw;
 use chirpstack_api::prost::Message;
 use log::{error, info, trace};
-use once_cell::sync::OnceCell;
 use tokio::sync::{mpsc, oneshot};
 
 use crate::backend;
@@ -12,7 +12,7 @@ use crate::config::Configuration;
 use crate::helpers;
 use crate::mesh;
 
-static EVENT_CHAN: OnceCell<EventChannel> = OnceCell::new();
+static EVENT_CHAN: OnceLock<EventChannel> = OnceLock::new();
 
 type Event = (String, Vec<u8>);
 type Command = ((String, Vec<u8>), oneshot::Sender<Vec<u8>>);
@@ -54,7 +54,7 @@ pub async fn setup(conf: &Configuration) -> Result<()> {
 
     EVENT_CHAN
         .set(event_tx)
-        .map_err(|e| anyhow!("OnceCell error: {:?}", e))?;
+        .map_err(|e| anyhow!("OnceLock error: {:?}", e))?;
 
     // Setup ZMQ command.
 

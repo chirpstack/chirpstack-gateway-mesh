@@ -1,15 +1,14 @@
 use std::fs;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
 use anyhow::Result;
-use once_cell::sync::OnceCell;
 use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::aes128::Aes128Key;
 
-static CONFIG: OnceCell<Mutex<Arc<Configuration>>> = OnceCell::new();
+static CONFIG: OnceLock<Mutex<Arc<Configuration>>> = OnceLock::new();
 
 #[derive(Serialize, Deserialize, Default)]
 #[serde(default)]
@@ -225,13 +224,13 @@ impl<'de> Deserialize<'de> for CodeRate {
 pub fn set(c: Configuration) -> Result<()> {
     CONFIG
         .set(Mutex::new(Arc::new(c)))
-        .map_err(|_| anyhow!("Set OnceCell error"))
+        .map_err(|_| anyhow!("Set OnceLock error"))
 }
 
 pub fn get() -> Arc<Configuration> {
     let conf = CONFIG
         .get()
-        .ok_or_else(|| anyhow!("OnceCell is not set"))
+        .ok_or_else(|| anyhow!("OnceLock is not set"))
         .unwrap();
 
     conf.lock().unwrap().clone()

@@ -1,20 +1,20 @@
+use std::sync::OnceLock;
 use std::thread;
 
 use anyhow::Result;
 use chirpstack_api::prost::Message;
 use log::{debug, error, info, trace};
-use once_cell::sync::OnceCell;
 use tokio::sync::{mpsc, oneshot, Mutex};
 
 use crate::config::Configuration;
 use crate::{helpers, mesh, proxy};
 use chirpstack_api::gw;
 
-static GATEWAY_ID: OnceCell<Mutex<[u8; 8]>> = OnceCell::new();
-static RELAY_ID: OnceCell<Mutex<[u8; 4]>> = OnceCell::new();
+static GATEWAY_ID: OnceLock<Mutex<[u8; 8]>> = OnceLock::new();
+static RELAY_ID: OnceLock<Mutex<[u8; 4]>> = OnceLock::new();
 
-static CONCENTRATORD_CMD_CHAN: OnceCell<CommandChannel> = OnceCell::new();
-static MESH_CONCENTRATORD_CMD_CHAN: OnceCell<CommandChannel> = OnceCell::new();
+static CONCENTRATORD_CMD_CHAN: OnceLock<CommandChannel> = OnceLock::new();
+static MESH_CONCENTRATORD_CMD_CHAN: OnceLock<CommandChannel> = OnceLock::new();
 
 type Event = (String, Vec<u8>);
 type Command = ((String, Vec<u8>), oneshot::Sender<Result<Vec<u8>>>);
@@ -66,13 +66,13 @@ async fn setup_concentratord(conf: &Configuration) -> Result<()> {
     info!("Retrieved Gateway ID: {}", hex::encode(gateway_id));
     GATEWAY_ID
         .set(Mutex::new(gateway_id))
-        .map_err(|e| anyhow!("OnceCell error: {:?}", e))?;
+        .map_err(|e| anyhow!("OnceLock error: {:?}", e))?;
 
     // Set CMD channel.
 
     CONCENTRATORD_CMD_CHAN
         .set(cmd_tx)
-        .map_err(|e| anyhow!("OnceCell error: {:?}", e))?;
+        .map_err(|e| anyhow!("OnceLock error: {:?}", e))?;
 
     // Setup ZMQ event.
 
@@ -163,13 +163,13 @@ async fn setup_mesh_conncentratord(conf: &Configuration) -> Result<()> {
     relay_id.copy_from_slice(&resp[4..]);
     RELAY_ID
         .set(Mutex::new(relay_id))
-        .map_err(|e| anyhow!("OnceCell error: {:?}", e))?;
+        .map_err(|e| anyhow!("OnceLock error: {:?}", e))?;
 
     // set CMD channel.
 
     MESH_CONCENTRATORD_CMD_CHAN
         .set(cmd_tx)
-        .map_err(|e| anyhow!("OnceCell error: {:?}", e))?;
+        .map_err(|e| anyhow!("OnceLock error: {:?}", e))?;
 
     // Setup ZMQ event.
 

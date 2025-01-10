@@ -1,10 +1,10 @@
 use std::collections::HashMap;
+use std::sync::LazyLock;
 use std::sync::Mutex;
 
 use anyhow::Result;
 use chirpstack_api::gw;
 use log::{info, trace, warn};
-use once_cell::sync::Lazy;
 use rand::random;
 
 use crate::{
@@ -22,9 +22,10 @@ use crate::{
 static CTX_PREFIX: [u8; 3] = [1, 2, 3];
 static MESH_CHANNEL: Mutex<usize> = Mutex::new(0);
 static UPLINK_ID: Mutex<u16> = Mutex::new(0);
-static UPLINK_CONTEXT: Lazy<Mutex<HashMap<u16, Vec<u8>>>> =
-    Lazy::new(|| Mutex::new(HashMap::new()));
-static PAYLOAD_CACHE: Lazy<Mutex<Cache<PayloadCache>>> = Lazy::new(|| Mutex::new(Cache::new(64)));
+static UPLINK_CONTEXT: LazyLock<Mutex<HashMap<u16, Vec<u8>>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+static PAYLOAD_CACHE: LazyLock<Mutex<Cache<PayloadCache>>> =
+    LazyLock::new(|| Mutex::new(Cache::new(64)));
 
 // Handle LoRaWAN payload (non-proprietary).
 pub async fn handle_uplink(border_gateway: bool, pl: gw::UplinkFrame) -> Result<()> {
