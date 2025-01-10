@@ -2,8 +2,7 @@ use crate::config;
 use handlebars::{no_escape, Handlebars};
 
 pub fn run() {
-    let template = r#"
-# Logging settings.
+    let template = r#"# Logging settings.
 [logging]
 
   # Log level.
