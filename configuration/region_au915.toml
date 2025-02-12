@@ -1,0 +1,157 @@
+[mappings]
+
+  channels = [
+    915200000,
+    915400000,
+    915600000,
+    915800000,
+    916000000,
+    916200000,
+    916400000,
+    916600000,
+    916800000,
+    917000000,
+    917200000,
+    917400000,
+    917600000,
+    917800000,
+    918000000,
+    918200000,
+    918400000,
+    918600000,
+    918800000,
+    919000000,
+    919200000,
+    919400000,
+    919600000,
+    919800000,
+    920000000,
+    920200000,
+    920400000,
+    920600000,
+    920800000,
+    921000000,
+    921200000,
+    921400000,
+    921600000,
+    921800000,
+    922000000,
+    922200000,
+    922400000,
+    922600000,
+    922800000,
+    923000000,
+    923200000,
+    923400000,
+    923600000,
+    923800000,
+    924000000,
+    924200000,
+    924400000,
+    924600000,
+    924800000,
+    925000000,
+    925200000,
+    925400000,
+    925600000,
+    925800000,
+    926000000,
+    926200000,
+    926400000,
+    926600000,
+    926800000,
+    927000000,
+    927200000,
+    927400000,
+    927600000,
+    927800000,
+    915900000,
+    917500000,
+    919100000,
+    920700000,
+    922300000,
+    923900000,
+    925500000,
+    927100000,
+  ]
+
+  [[mappings.data_rates]]
+    modulation = "LORA"
+    spreading_factor = 12
+    bandwidth = 125000
+    code_rate = "4/5"
+
+  [[mappings.data_rates]]
+    modulation = "LORA"
+    spreading_factor = 11
+    bandwidth = 125000
+    code_rate = "4/5"
+
+  [[mappings.data_rates]]
+    modulation = "LORA"
+    spreading_factor = 10
+    bandwidth = 125000
+    code_rate = "4/5"
+
+  [[mappings.data_rates]]
+    modulation = "LORA"
+    spreading_factor = 9
+    bandwidth = 125000
+    code_rate = "4/5"
+
+  [[mappings.data_rates]]
+    modulation = "LORA"
+    spreading_factor = 8
+    bandwidth = 125000
+    code_rate = "4/5"
+
+  [[mappings.data_rates]]
+    modulation = "LORA"
+    spreading_factor = 7
+    bandwidth = 125000
+    code_rate = "4/5"
+
+  [[mappings.data_rates]]
+    modulation = "LORA"
+    spreading_factor = 8
+    bandwidth = 500000
+    code_rate = "4/5"
+
+  [[mappings.data_rates]]
+    # RFU
+
+  [[mappings.data_rates]]
+    modulation = "LORA"
+    spreading_factor = 12
+    bandwidth = 500000
+    code_rate = "4/5"
+
+  [[mappings.data_rates]]
+    modulation = "LORA"
+    spreading_factor = 11
+    bandwidth = 500000
+    code_rate = "4/5"
+
+  [[mappings.data_rates]]
+    modulation = "LORA"
+    spreading_factor = 10
+    bandwidth = 500000
+    code_rate = "4/5"
+
+  [[mappings.data_rates]]
+    modulation = "LORA"
+    spreading_factor = 9
+    bandwidth = 500000
+    code_rate = "4/5"
+
+  [[mappings.data_rates]]
+    modulation = "LORA"
+    spreading_factor = 8
+    bandwidth = 500000
+    code_rate = "4/5"
+
+  [[mappings.data_rates]]
+    modulation = "LORA"
+    spreading_factor = 7
+    bandwidth = 500000
+    code_rate = "4/5"
