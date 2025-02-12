@@ -1,6 +1,6 @@
-use std::fs;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
+use std::{env, fs};
 
 use anyhow::Result;
 use serde::de::Error;
@@ -24,6 +24,11 @@ impl Configuration {
         let mut content = String::new();
         for file_name in filenames {
             content.push_str(&fs::read_to_string(file_name)?);
+        }
+
+        // substitute environment variables in config file
+        for (k, v) in env::vars() {
+            content = content.replace(&format!("${}", k), &v);
         }
 
         let conf: Configuration = toml::from_str(&content)?;
