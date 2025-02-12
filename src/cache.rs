@@ -1,5 +1,5 @@
+use std::collections::VecDeque;
 use std::time::UNIX_EPOCH;
-use std::{collections::VecDeque, usize};
 
 use crate::packets;
 

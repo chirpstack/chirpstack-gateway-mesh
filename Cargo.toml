@@ -16,7 +16,7 @@
     "usage",
     "derive",
   ] }
-  chirpstack_api = { version = "4.9", default-features = false }
+  chirpstack_api = { version = "4.11.1", default-features = false }
   lrwn_filters = { version = "4.9", features = ["serde"] }
   log = "0.4"
   simple_logger = "5.0"
@@ -33,8 +33,8 @@
     "fs",
     "sync",
   ] }
-  hex = "0.4.3"
-  rand = "0.8"
+  hex = "0.4"
+  rand = "0.9"
   signal-hook = "0.3"
   signal-hook-tokio = { version = "0.3", features = ["futures-v0_3"] }
   futures = "0.3"
@@ -45,7 +45,7 @@
 
 [dev-dependencies]
   zeromq = "0.4"
-  bytes = "1.9"
+  bytes = "1.10"
 
 [profile.release]
   strip = true

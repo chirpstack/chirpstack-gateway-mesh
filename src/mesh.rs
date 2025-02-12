@@ -174,7 +174,7 @@ async fn proxy_heartbeat_mesh_packet(pl: &gw::UplinkFrame, packet: MeshPacket) -
             .relay_path
             .iter()
             .map(|v| gw::MeshHeartbeatRelayPath {
-                relay_id: hex::encode(&v.relay_id),
+                relay_id: hex::encode(v.relay_id),
                 rssi: v.rssi.into(),
                 snr: v.snr.into(),
             })

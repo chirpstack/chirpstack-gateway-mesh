@@ -81,7 +81,7 @@ impl<'de> Deserialize<'de> for Aes128Key {
 
 struct Aes128KeyVisitor;
 
-impl<'de> Visitor<'de> for Aes128KeyVisitor {
+impl Visitor<'_> for Aes128KeyVisitor {
     type Value = Aes128Key;
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
