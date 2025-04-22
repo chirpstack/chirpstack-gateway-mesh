@@ -191,7 +191,7 @@ impl MHDR {
             return Err(anyhow!("Max hop_count is 8"));
         }
 
-        Ok(0x07 << 5 | self.payload_type.to_byte() << 3 | (self.hop_count - 1))
+        Ok((0x07 << 5) | (self.payload_type.to_byte() << 3) | (self.hop_count - 1))
     }
 }
 
