@@ -16,8 +16,8 @@
     "usage",
     "derive",
   ] }
-  chirpstack_api = { version = "4.11.1", default-features = false }
-  lrwn_filters = { version = "4.9", features = ["serde"] }
+  chirpstack_api = { version = "4.12", default-features = false }
+  lrwn_filters = { version = "4.12", features = ["serde"] }
   log = "0.4"
   simple_logger = "5.0"
   syslog = "7.0"
@@ -26,7 +26,7 @@
   anyhow = "1.0"
   humantime-serde = "1.1"
   serde = { version = "1.0", features = ["derive"] }
-  tokio = { version = "1.43", features = [
+  tokio = { version = "1.44", features = [
     "macros",
     "rt-multi-thread",
     "time",
@@ -40,8 +40,8 @@
   futures = "0.3"
   prost-types = "0.13"
   zmq = "0.10"
-  cmac = { version = "0.7" }
-  aes = { version = "0.8" }
+  cmac = "0.7"
+  aes = "0.8"
 
 [dev-dependencies]
   zeromq = "0.4"
