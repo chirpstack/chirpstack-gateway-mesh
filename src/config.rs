@@ -17,6 +17,7 @@ pub struct Configuration {
     pub mesh: Mesh,
     pub backend: Backend,
     pub mappings: Mappings,
+    pub events: Events,
 }
 
 impl Configuration {
@@ -56,8 +57,6 @@ impl Default for Logging {
 #[serde(default)]
 pub struct Mesh {
     pub signing_key: Aes128Key,
-    #[serde(with = "humantime_serde")]
-    pub heartbeat_interval: Duration,
     pub frequencies: Vec<u32>,
     pub data_rate: DataRate,
     pub tx_power: i32,
@@ -72,7 +71,6 @@ impl Default for Mesh {
     fn default() -> Self {
         Mesh {
             signing_key: Aes128Key::null(),
-            heartbeat_interval: Duration::from_secs(300),
             frequencies: vec![868100000, 868300000, 868500000],
             data_rate: DataRate {
                 modulation: Modulation::LORA,
@@ -153,6 +151,21 @@ pub struct DataRate {
     pub bandwidth: u32,
     pub code_rate: Option<CodeRate>,
     pub bitrate: u32,
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default)]
+pub struct Events {
+    #[serde(with = "humantime_serde")]
+    pub heartbeat_interval: Duration,
+}
+
+impl Default for Events {
+    fn default() -> Self {
+        Events {
+            heartbeat_interval: Duration::from_secs(300),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default)]

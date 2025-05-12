@@ -15,17 +15,17 @@ use crate::packets;
 pub async fn setup(conf: &Configuration) -> Result<()> {
     // Only Relay gatewways need to report heartbeat as the Border Gateway is already internet
     // connected and reports status through the Concentratord.
-    if conf.mesh.border_gateway || conf.mesh.heartbeat_interval.is_zero() {
+    if conf.mesh.border_gateway || conf.events.heartbeat_interval.is_zero() {
         return Ok(());
     }
 
     info!(
         "Starting heartbeat loop, heartbeat_interval: {:?}",
-        conf.mesh.heartbeat_interval
+        conf.events.heartbeat_interval
     );
 
     tokio::spawn({
-        let heartbeat_interval = conf.mesh.heartbeat_interval;
+        let heartbeat_interval = conf.events.heartbeat_interval;
 
         async move {
             loop {
