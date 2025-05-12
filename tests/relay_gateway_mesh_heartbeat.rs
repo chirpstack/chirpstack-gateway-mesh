@@ -30,10 +30,12 @@ async fn test_relay_gateway_mesh_heartbeat() {
             .await;
         let msg = cmd_sock.recv().await.unwrap();
 
-        let cmd = String::from_utf8(msg.get(0).map(|v| v.to_vec()).unwrap()).unwrap();
-        assert_eq!("down", cmd);
-
-        gw::DownlinkFrame::decode(msg.get(1).cloned().unwrap()).unwrap()
+        let cmd = gw::Command::decode(msg.get(0).cloned().unwrap()).unwrap();
+        if let Some(gw::command::Command::SendDownlinkFrame(v)) = cmd.command {
+            v
+        } else {
+            panic!("No DownlinkFrame");
+        }
     };
 
     let down_item = down.items.first().unwrap();
@@ -41,7 +43,7 @@ async fn test_relay_gateway_mesh_heartbeat() {
     assert_ne!([0, 0, 0, 0], mesh_packet.mic.unwrap());
     mesh_packet.mic = None;
 
-    if let packets::Payload::Heartbeat(v) = &mut mesh_packet.payload {
+    if let packets::Payload::Event(v) = &mut mesh_packet.payload {
         // Assert the time is ~ now()
         assert!(
             SystemTime::now()
@@ -55,13 +57,15 @@ async fn test_relay_gateway_mesh_heartbeat() {
     assert_eq!(
         packets::MeshPacket {
             mhdr: packets::MHDR {
-                payload_type: packets::PayloadType::Heartbeat,
+                payload_type: packets::PayloadType::Event,
                 hop_count: 1,
             },
-            payload: packets::Payload::Heartbeat(packets::HeartbeatPayload {
+            payload: packets::Payload::Event(packets::EventPayload {
                 relay_id: [2, 2, 2, 2],
                 timestamp: UNIX_EPOCH,
-                relay_path: vec![],
+                events: vec![packets::Event::Heartbeat(packets::HeartbeatPayload {
+                    relay_path: vec![]
+                }),],
             }),
             mic: None,
         },

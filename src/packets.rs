@@ -1,9 +1,11 @@
 use std::fmt;
+use std::io::{Cursor, Read};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use aes::Aes128;
 use anyhow::Result;
 use cmac::{Cmac, Mac};
+use log::warn;
 
 use crate::aes128::Aes128Key;
 
@@ -62,9 +64,7 @@ impl MeshPacket {
                 PayloadType::Downlink => {
                     Payload::Downlink(DownlinkPayload::from_slice(&b[1..len - 4])?)
                 }
-                PayloadType::Heartbeat => {
-                    Payload::Heartbeat(HeartbeatPayload::from_slice(&b[1..len - 4])?)
-                }
+                PayloadType::Event => Payload::Event(EventPayload::from_slice(&b[1..len - 4])?),
             },
             mic: Some(mic),
             mhdr,
@@ -76,7 +76,7 @@ impl MeshPacket {
         b.extend_from_slice(&match &self.payload {
             Payload::Uplink(v) => v.to_vec()?,
             Payload::Downlink(v) => v.to_vec()?,
-            Payload::Heartbeat(v) => v.to_vec()?,
+            Payload::Event(v) => v.to_vec()?,
         });
 
         if let Some(mic) = self.mic {
@@ -93,7 +93,7 @@ impl MeshPacket {
         b.extend_from_slice(&match &self.payload {
             Payload::Uplink(v) => v.to_vec()?,
             Payload::Downlink(v) => v.to_vec()?,
-            Payload::Heartbeat(v) => v.to_vec()?,
+            Payload::Event(v) => v.to_vec()?,
         });
 
         Ok(b)
@@ -152,7 +152,7 @@ impl fmt::Display for MeshPacket {
                 hex::encode(v.relay_id),
                 self.mic.map(hex::encode).unwrap_or_default(),
             ),
-            Payload::Heartbeat(v) => write!(
+            Payload::Event(v) => write!(
                 f,
                 "[{:?} hop_count: {}, timestamp: {:?}, relay_id: {}]",
                 self.mhdr.payload_type,
@@ -199,7 +199,7 @@ impl MHDR {
 pub enum PayloadType {
     Uplink,
     Downlink,
-    Heartbeat,
+    Event,
 }
 
 impl PayloadType {
@@ -207,7 +207,7 @@ impl PayloadType {
         Ok(match b {
             0x00 => PayloadType::Uplink,
             0x01 => PayloadType::Downlink,
-            0x02 => PayloadType::Heartbeat,
+            0x02 => PayloadType::Event,
             _ => return Err(anyhow!("Unexpected PayloadType: {}", b)),
         })
     }
@@ -216,7 +216,7 @@ impl PayloadType {
         match self {
             PayloadType::Uplink => 0x00,
             PayloadType::Downlink => 0x01,
-            PayloadType::Heartbeat => 0x02,
+            PayloadType::Event => 0x02,
         }
     }
 }
@@ -225,7 +225,7 @@ impl PayloadType {
 pub enum Payload {
     Uplink(UplinkPayload),
     Downlink(DownlinkPayload),
-    Heartbeat(HeartbeatPayload),
+    Event(EventPayload),
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -417,33 +417,102 @@ impl DownlinkMetadata {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct HeartbeatPayload {
+pub struct EventPayload {
     pub timestamp: SystemTime,
     pub relay_id: [u8; 4],
-    pub relay_path: Vec<RelayPath>,
+    pub events: Vec<Event>,
 }
 
-impl HeartbeatPayload {
-    pub fn from_slice(b: &[u8]) -> Result<HeartbeatPayload> {
-        if b.len() < 8 {
-            return Err(anyhow!("At least 8 bytes are expected"));
-        }
-
-        if (b.len() - 8) % 6 != 0 {
-            return Err(anyhow!("Invalid amount of Relay path bytes"));
-        }
-
+impl EventPayload {
+    pub fn from_slice(b: &[u8]) -> Result<EventPayload> {
+        let b_len = b.len() as u64;
+        let mut cur = Cursor::new(b);
         let mut ts_b: [u8; 4] = [0; 4];
-        ts_b.copy_from_slice(&b[0..4]);
+
+        cur.read_exact(&mut ts_b)?;
         let timestamp = u32::from_be_bytes(ts_b);
         let timestamp = UNIX_EPOCH
             .checked_add(Duration::from_secs(timestamp.into()))
             .ok_or_else(|| anyhow!("Invalid timestamp"))?;
 
         let mut relay_id: [u8; 4] = [0; 4];
-        relay_id.copy_from_slice(&b[4..8]);
+        cur.read_exact(&mut relay_id)?;
 
-        let relay_path: Vec<RelayPath> = b[8..]
+        let mut events = Vec::new();
+        while cur.position() < b_len {
+            match Event::decode(&mut cur) {
+                Ok(v) => events.push(v),
+                Err(e) => warn!("Decode event error: {}", e),
+            }
+        }
+
+        Ok(EventPayload {
+            timestamp,
+            relay_id,
+            events,
+        })
+    }
+
+    pub fn to_vec(&self) -> Result<Vec<u8>> {
+        let timestamp = self.timestamp.duration_since(UNIX_EPOCH)?.as_secs() as u32;
+        let mut b = timestamp.to_be_bytes().to_vec();
+        b.extend_from_slice(&self.relay_id);
+
+        for event in &self.events {
+            b.extend_from_slice(&event.encode()?);
+        }
+
+        Ok(b)
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum Event {
+    Heartbeat(HeartbeatPayload),
+    Proprietary((u8, Vec<u8>)),
+}
+
+impl Event {
+    pub fn decode(cur: &mut Cursor<&[u8]>) -> Result<Self> {
+        let mut tag_length: [u8; 2] = [0; 2];
+        cur.read_exact(&mut tag_length)?;
+
+        let mut value = vec![0; tag_length[1] as usize];
+        cur.read_exact(&mut value)?;
+
+        Ok(match tag_length[0] {
+            0x00 => Event::Heartbeat(HeartbeatPayload::from_slice(&value)?),
+            _ => Event::Proprietary((tag_length[0], value)),
+        })
+    }
+
+    pub fn encode(&self) -> Result<Vec<u8>> {
+        let (t, v) = match self {
+            Event::Heartbeat(v) => (0x00, v.to_vec()?),
+            Event::Proprietary((t, v)) => (*t, v.clone()),
+        };
+
+        let mut b = Vec::with_capacity(2 + v.len());
+        b.push(t);
+        b.push(v.len() as u8);
+        b.extend_from_slice(&v);
+
+        Ok(b)
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct HeartbeatPayload {
+    pub relay_path: Vec<RelayPath>,
+}
+
+impl HeartbeatPayload {
+    pub fn from_slice(b: &[u8]) -> Result<Self> {
+        if b.len() % 6 != 0 {
+            return Err(anyhow!("Invalid amount of Relay path bytes"));
+        }
+
+        let relay_path: Vec<RelayPath> = b
             .chunks(6)
             .map(|v| {
                 let mut b: [u8; 6] = [0; 6];
@@ -452,17 +521,11 @@ impl HeartbeatPayload {
             })
             .collect();
 
-        Ok(HeartbeatPayload {
-            timestamp,
-            relay_id,
-            relay_path,
-        })
+        Ok(HeartbeatPayload { relay_path })
     }
 
     pub fn to_vec(&self) -> Result<Vec<u8>> {
-        let timestamp = self.timestamp.duration_since(UNIX_EPOCH)?.as_secs() as u32;
-        let mut b = timestamp.to_be_bytes().to_vec();
-        b.extend_from_slice(&self.relay_id);
+        let mut b = Vec::with_capacity(self.relay_path.len() * 6);
         for relay_path in &self.relay_path {
             b.extend_from_slice(&relay_path.to_bytes()?);
         }
@@ -1018,17 +1081,44 @@ mod test {
     }
 
     #[test]
-    fn test_heartbeat_payload_from_slice() {
+    fn test_event_heartbeat_payload_from_slice() {
         let b = vec![
-            59, 154, 202, 0, 1, 2, 3, 4, 5, 6, 7, 8, 120, 52, 9, 10, 11, 12, 120, 52,
+            59, 154, 202, 0, 1, 2, 3, 4, 0, 12, 5, 6, 7, 8, 120, 52, 9, 10, 11, 12, 120, 52,
         ];
-        let heartbeat_pl = HeartbeatPayload::from_slice(&b).unwrap();
+        let event_pl = EventPayload::from_slice(&b).unwrap();
         assert_eq!(
-            HeartbeatPayload {
+            EventPayload {
                 timestamp: UNIX_EPOCH
                     .checked_add(Duration::from_secs(1_000_000_000))
                     .unwrap(),
                 relay_id: [1, 2, 3, 4],
+                events: vec![Event::Heartbeat(HeartbeatPayload {
+                    relay_path: vec![
+                        RelayPath {
+                            relay_id: [5, 6, 7, 8],
+                            rssi: -120,
+                            snr: -12,
+                        },
+                        RelayPath {
+                            relay_id: [9, 10, 11, 12],
+                            rssi: -120,
+                            snr: -12,
+                        },
+                    ]
+                }),],
+            },
+            event_pl,
+        );
+    }
+
+    #[test]
+    fn test_heartbeat_payload_to_vec() {
+        let event_pl = EventPayload {
+            timestamp: UNIX_EPOCH
+                .checked_add(Duration::from_secs(1_000_000_000))
+                .unwrap(),
+            relay_id: [1, 2, 3, 4],
+            events: vec![Event::Heartbeat(HeartbeatPayload {
                 relay_path: vec![
                     RelayPath {
                         relay_id: [5, 6, 7, 8],
@@ -1041,34 +1131,11 @@ mod test {
                         snr: -12,
                     },
                 ],
-            },
-            heartbeat_pl,
-        );
-    }
-
-    #[test]
-    fn test_heartbeat_payload_to_vec() {
-        let heartbeat_pl = HeartbeatPayload {
-            timestamp: UNIX_EPOCH
-                .checked_add(Duration::from_secs(1_000_000_000))
-                .unwrap(),
-            relay_id: [1, 2, 3, 4],
-            relay_path: vec![
-                RelayPath {
-                    relay_id: [5, 6, 7, 8],
-                    rssi: -120,
-                    snr: -12,
-                },
-                RelayPath {
-                    relay_id: [9, 10, 11, 12],
-                    rssi: -120,
-                    snr: -12,
-                },
-            ],
+            })],
         };
-        let b = heartbeat_pl.to_vec().unwrap();
+        let b = event_pl.to_vec().unwrap();
         assert_eq!(
-            vec![59, 154, 202, 0, 1, 2, 3, 4, 5, 6, 7, 8, 120, 52, 9, 10, 11, 12, 120, 52],
+            vec![59, 154, 202, 0, 1, 2, 3, 4, 0, 12, 5, 6, 7, 8, 120, 52, 9, 10, 11, 12, 120, 52],
             b
         );
     }

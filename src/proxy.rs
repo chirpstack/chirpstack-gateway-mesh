@@ -14,9 +14,8 @@ use crate::mesh;
 
 static EVENT_CHAN: OnceLock<EventChannel> = OnceLock::new();
 
-type Event = (String, Vec<u8>);
-type Command = ((String, Vec<u8>), oneshot::Sender<Vec<u8>>);
-type EventChannel = mpsc::UnboundedSender<Event>;
+type EventChannel = mpsc::UnboundedSender<gw::Event>;
+type Command = (gw::Command, oneshot::Sender<Vec<u8>>);
 type CommandChannel = mpsc::UnboundedReceiver<Command>;
 
 pub async fn setup(conf: &Configuration) -> Result<()> {
@@ -32,7 +31,7 @@ pub async fn setup(conf: &Configuration) -> Result<()> {
     // Setup ZMQ event.
 
     // As the zmq::Context can't be shared between threads, we use a channel.
-    let (event_tx, mut event_rx) = mpsc::unbounded_channel::<Event>();
+    let (event_tx, mut event_rx) = mpsc::unbounded_channel::<gw::Event>();
 
     // Spawn the zmq event handler to a dedicated thread.
     thread::spawn({
@@ -44,20 +43,17 @@ pub async fn setup(conf: &Configuration) -> Result<()> {
             sock.bind(&event_bind).unwrap();
 
             while let Some(event) = event_rx.blocking_recv() {
-                sock.send(&event.0, zmq::SNDMORE).unwrap();
-                sock.send(&event.1, 0).unwrap();
+                sock.send(&event.encode_to_vec(), 0).unwrap();
             }
         }
     });
 
     // Set event channel.
-
     EVENT_CHAN
         .set(event_tx)
         .map_err(|e| anyhow!("OnceLock error: {:?}", e))?;
 
     // Setup ZMQ command.
-
     let (command_tx, command_rx) = mpsc::unbounded_channel::<Command>();
 
     // Spawn the zmq command handler to a dedicated thread.
@@ -73,7 +69,7 @@ pub async fn setup(conf: &Configuration) -> Result<()> {
                 match receive_zmq_command(&mut sock) {
                     Ok(v) => {
                         let (resp_tx, resp_rx) = oneshot::channel::<Vec<u8>>();
-                        command_tx.send(((v.0, v.1), resp_tx)).unwrap();
+                        command_tx.send((v, resp_tx)).unwrap();
 
                         match resp_rx.blocking_recv() {
                             Ok(v) => sock.send(&v, 0).unwrap(),
@@ -102,38 +98,14 @@ pub async fn setup(conf: &Configuration) -> Result<()> {
     Ok(())
 }
 
-pub async fn send_uplink(pl: &gw::UplinkFrame) -> Result<()> {
-    info!("Sending uplink event - {}", helpers::format_uplink(pl)?);
+pub async fn send_event(pl: gw::Event) -> Result<()> {
+    info!("Sending event");
 
     let event_chan = EVENT_CHAN
         .get()
         .ok_or_else(|| anyhow!("EVENT_CHAN is not set"))?;
 
-    event_chan.send(("up".to_string(), pl.encode_to_vec()))?;
-
-    Ok(())
-}
-
-pub async fn send_stats(pl: &gw::GatewayStats) -> Result<()> {
-    info!("Sending gateway stats event");
-
-    let event_chan = EVENT_CHAN
-        .get()
-        .ok_or_else(|| anyhow!("EVENT_CHAN is not set"))?;
-
-    event_chan.send(("stats".to_string(), pl.encode_to_vec()))?;
-
-    Ok(())
-}
-
-pub async fn send_mesh_heartbeat(pl: &gw::MeshHeartbeat) -> Result<()> {
-    info!("Sending mesh heartbeat event");
-
-    let event_chan = EVENT_CHAN
-        .get()
-        .ok_or_else(|| anyhow!("EVENT_CHAN is not set"))?;
-
-    event_chan.send(("mesh_heartbeat".to_string(), pl.encode_to_vec()))?;
+    event_chan.send(pl)?;
 
     Ok(())
 }
@@ -142,7 +114,7 @@ async fn command_loop(mut command_rx: CommandChannel) {
     trace!("Starting command loop");
 
     while let Some(cmd) = command_rx.recv().await {
-        match handle_command(&cmd).await {
+        match handle_command(cmd.0).await {
             Ok(v) => {
                 _ = cmd.1.send(v);
             }
@@ -156,40 +128,33 @@ async fn command_loop(mut command_rx: CommandChannel) {
     error!("Command loop has been interrupted");
 }
 
-async fn handle_command(cmd: &Command) -> Result<Vec<u8>> {
-    Ok(match cmd.0 .0.as_str() {
-        "config" => {
-            let pl = gw::GatewayConfiguration::decode(cmd.0 .1.as_slice())?;
-            info!("Configuration command received, version: {}", pl.version);
-            backend::send_gateway_configuration(&pl).await?;
+async fn handle_command(cmd: gw::Command) -> Result<Vec<u8>> {
+    Ok(match cmd.command {
+        Some(gw::command::Command::SetGatewayConfiguration(v)) => {
+            info!("Configuration command received, version: {}", v.version);
+            backend::send_gateway_configuration(v).await?;
             Vec::new()
         }
-        "down" => {
-            let pl = gw::DownlinkFrame::decode(cmd.0 .1.as_slice())?;
+        Some(gw::command::Command::SendDownlinkFrame(v)) => {
             info!(
                 "Downlink command received - {}",
-                helpers::format_downlink(&pl)?
+                helpers::format_downlink(&v)?
             );
-            mesh::handle_downlink(pl).await.map(|v| v.encode_to_vec())?
+            mesh::handle_downlink(v).await.map(|v| v.encode_to_vec())?
         }
-        "gateway_id" => {
+        Some(gw::command::Command::GetGatewayId(_)) => {
             info!("Get gateway id command received");
-            backend::get_gateway_id().await.map(|v| v.to_vec())?
+            gw::GetGatewayIdResponse {
+                gateway_id: hex::encode(&backend::get_gateway_id().await.unwrap_or_default()),
+            }
+            .encode_to_vec()
         }
-        _ => {
-            return Err(anyhow!("Unexpected command: {}", cmd.0 .0));
-        }
+        _ => return Err(anyhow!("Unexpected command: {:?}", cmd.command)),
     })
 }
 
-fn receive_zmq_command(sock: &mut zmq::Socket) -> Result<(String, Vec<u8>)> {
-    let msg = sock.recv_multipart(0).unwrap();
-    if msg.len() != 2 {
-        return Err(anyhow!("Command must have 2 frames"));
-    }
-
-    let cmd = String::from_utf8(msg[0].to_vec())?;
-    let b = msg[1].to_vec();
-
-    Ok((cmd, b))
+fn receive_zmq_command(sock: &mut zmq::Socket) -> Result<gw::Command> {
+    let b = sock.recv_bytes(0)?;
+    let cmd = gw::Command::decode(b.as_slice())?;
+    Ok(cmd)
 }

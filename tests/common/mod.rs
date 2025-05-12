@@ -6,6 +6,7 @@ use tokio::sync::Mutex;
 use tokio::time::sleep;
 use zeromq::{Socket, SocketRecv, SocketSend};
 
+use chirpstack_api::{gw, prost::Message};
 use chirpstack_gateway_mesh::config::{self, Configuration};
 
 pub static FORWARDER_EVENT_SOCK: OnceLock<Mutex<zeromq::SubSocket>> = OnceLock::new();
@@ -177,7 +178,13 @@ async fn init_mesh() {
         let mut cmd_sock = BACKEND_COMMAND_SOCK.get().unwrap().lock().await;
         let _ = cmd_sock.recv().await;
         cmd_sock
-            .send(vec![1, 1, 1, 1, 1, 1, 1, 1].into())
+            .send(
+                gw::GetGatewayIdResponse {
+                    gateway_id: "0101010101010101".into(),
+                }
+                .encode_to_vec()
+                .into(),
+            )
             .await
             .unwrap();
     });
@@ -186,7 +193,13 @@ async fn init_mesh() {
         let mut cmd_sock = MESH_BACKEND_COMMAND_SOCK.get().unwrap().lock().await;
         let _ = cmd_sock.recv().await;
         cmd_sock
-            .send(vec![2, 2, 2, 2, 2, 2, 2, 2].into())
+            .send(
+                gw::GetGatewayIdResponse {
+                    gateway_id: "0202020202020202".into(),
+                }
+                .encode_to_vec()
+                .into(),
+            )
             .await
             .unwrap();
     });

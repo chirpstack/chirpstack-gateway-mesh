@@ -16,7 +16,7 @@
     "usage",
     "derive",
   ] }
-  chirpstack_api = { version = "4.12", default-features = false }
+  chirpstack_api = { version = "4.12.0", default-features = false, path = "../chirpstack/api/rust" }
   lrwn_filters = { version = "4.12", features = ["serde"] }
   log = "0.4"
   simple_logger = "5.0"

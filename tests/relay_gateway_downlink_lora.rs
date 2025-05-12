@@ -68,28 +68,30 @@ async fn test_relay_gateway_downlink_lora() {
     // (we simulate that we receive the Mesh encapsulated downlink)
     {
         let mut event_sock = common::MESH_BACKEND_EVENT_SOCK.get().unwrap().lock().await;
+        let event = gw::Event {
+            event: Some(gw::event::Event::UplinkFrame(up.clone())),
+        };
         event_sock
             .send(
-                vec![
-                    bytes::Bytes::from("up"),
-                    bytes::Bytes::from(up.encode_to_vec()),
-                ]
-                .try_into()
-                .unwrap(),
+                vec![bytes::Bytes::from(event.encode_to_vec())]
+                    .try_into()
+                    .unwrap(),
             )
             .await
             .unwrap();
     }
 
     // We expect that the unwrapped downlink was sent to the concentratord.
-    let mut down = {
+    let mut down: gw::DownlinkFrame = {
         let mut cmd_sock = common::BACKEND_COMMAND_SOCK.get().unwrap().lock().await;
         let msg = cmd_sock.recv().await.unwrap();
 
-        let cmd = String::from_utf8(msg.get(0).map(|v| v.to_vec()).unwrap()).unwrap();
-        assert_eq!("down", cmd);
-
-        gw::DownlinkFrame::decode(msg.get(1).cloned().unwrap()).unwrap()
+        let cmd = gw::Command::decode(msg.get(0).cloned().unwrap()).unwrap();
+        if let Some(gw::command::Command::SendDownlinkFrame(v)) = cmd.command {
+            v
+        } else {
+            panic!("No DownlinkFrame");
+        }
     };
 
     assert_ne!(0, down.downlink_id);

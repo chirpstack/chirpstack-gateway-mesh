@@ -52,14 +52,14 @@ async fn test_border_gateway_downlink_lora() {
     // Publish downlink command.
     {
         let mut cmd_sock = common::FORWARDER_COMMAND_SOCK.get().unwrap().lock().await;
+        let cmd = gw::Command {
+            command: Some(gw::command::Command::SendDownlinkFrame(down.clone())),
+        };
         cmd_sock
             .send(
-                vec![
-                    bytes::Bytes::from("down"),
-                    bytes::Bytes::from(down.encode_to_vec()),
-                ]
-                .try_into()
-                .unwrap(),
+                vec![bytes::Bytes::from(cmd.encode_to_vec())]
+                    .try_into()
+                    .unwrap(),
             )
             .await
             .unwrap();
@@ -70,10 +70,12 @@ async fn test_border_gateway_downlink_lora() {
         let mut cmd_sock = common::BACKEND_COMMAND_SOCK.get().unwrap().lock().await;
         let msg = cmd_sock.recv().await.unwrap();
 
-        let cmd = String::from_utf8(msg.get(0).map(|v| v.to_vec()).unwrap()).unwrap();
-        assert_eq!("down", cmd);
-
-        gw::DownlinkFrame::decode(msg.get(1).cloned().unwrap()).unwrap()
+        let cmd = gw::Command::decode(msg.get(0).cloned().unwrap()).unwrap();
+        if let Some(gw::command::Command::SendDownlinkFrame(v)) = cmd.command {
+            v
+        } else {
+            panic!("No DownlinkFrame");
+        }
     };
 
     assert_eq!(down, down_received);

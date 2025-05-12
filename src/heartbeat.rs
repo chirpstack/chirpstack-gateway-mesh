@@ -45,13 +45,15 @@ pub async fn report_heartbeat() -> Result<()> {
 
     let mut packet = packets::MeshPacket {
         mhdr: packets::MHDR {
-            payload_type: packets::PayloadType::Heartbeat,
+            payload_type: packets::PayloadType::Event,
             hop_count: 1,
         },
-        payload: packets::Payload::Heartbeat(packets::HeartbeatPayload {
+        payload: packets::Payload::Event(packets::EventPayload {
             timestamp: SystemTime::now(),
             relay_id: backend::get_relay_id().await.unwrap_or_default(),
-            relay_path: vec![],
+            events: vec![packets::Event::Heartbeat(packets::HeartbeatPayload {
+                relay_path: vec![],
+            })],
         }),
         mic: None,
     };
@@ -84,5 +86,5 @@ pub async fn report_heartbeat() -> Result<()> {
         "Sending heartbeat packet, downlink_id: {}, mesh_packet: {}",
         pl.downlink_id, packet
     );
-    backend::mesh(&pl).await
+    backend::mesh(pl).await
 }

@@ -22,24 +22,26 @@ async fn test_border_gateway_mesh_heartbeat() {
 
     let mut packet = packets::MeshPacket {
         mhdr: packets::MHDR {
-            payload_type: packets::PayloadType::Heartbeat,
+            payload_type: packets::PayloadType::Event,
             hop_count: 1,
         },
-        payload: packets::Payload::Heartbeat(packets::HeartbeatPayload {
+        payload: packets::Payload::Event(packets::EventPayload {
             relay_id: [2, 2, 2, 2],
             timestamp: UNIX_EPOCH,
-            relay_path: vec![
-                packets::RelayPath {
-                    relay_id: [1, 2, 3, 4],
-                    rssi: -120,
-                    snr: -12,
-                },
-                packets::RelayPath {
-                    relay_id: [5, 6, 7, 8],
-                    rssi: -120,
-                    snr: -12,
-                },
-            ],
+            events: vec![packets::Event::Heartbeat(packets::HeartbeatPayload {
+                relay_path: vec![
+                    packets::RelayPath {
+                        relay_id: [1, 2, 3, 4],
+                        rssi: -120,
+                        snr: -12,
+                    },
+                    packets::RelayPath {
+                        relay_id: [5, 6, 7, 8],
+                        rssi: -120,
+                        snr: -12,
+                    },
+                ],
+            })],
         }),
         mic: None,
     };
@@ -68,48 +70,54 @@ async fn test_border_gateway_mesh_heartbeat() {
     // Publish uplink event.
     {
         let mut event_sock = common::MESH_BACKEND_EVENT_SOCK.get().unwrap().lock().await;
+        let event = gw::Event {
+            event: Some(gw::event::Event::UplinkFrame(up.clone())),
+        };
         event_sock
             .send(
-                vec![
-                    bytes::Bytes::from("up"),
-                    bytes::Bytes::from(up.encode_to_vec()),
-                ]
-                .try_into()
-                .unwrap(),
+                vec![bytes::Bytes::from(event.encode_to_vec())]
+                    .try_into()
+                    .unwrap(),
             )
             .await
             .unwrap();
     }
 
-    // We expect to receive the MeshHeartbeat to be received by the forwarder.
-    let mesh_heartbeat: gw::MeshHeartbeat = {
+    // We expect to receive a Mesh Event.
+    let mesh_event: gw::Mesh = {
         let mut event_sock = common::FORWARDER_EVENT_SOCK.get().unwrap().lock().await;
         let msg = event_sock.recv().await.unwrap();
+        let event = gw::Event::decode(msg.get(0).cloned().unwrap()).unwrap();
 
-        let cmd = String::from_utf8(msg.get(0).map(|v| v.to_vec()).unwrap()).unwrap();
-        assert_eq!("mesh_heartbeat", cmd);
-
-        gw::MeshHeartbeat::decode(msg.get(1).cloned().unwrap()).unwrap()
+        if let Some(gw::event::Event::Mesh(v)) = event.event {
+            v
+        } else {
+            panic!("Event does not contain MeshEvent");
+        }
     };
 
     assert_eq!(
-        gw::MeshHeartbeat {
+        gw::Mesh {
             gateway_id: "0101010101010101".to_string(),
             time: Some(UNIX_EPOCH.into()),
             relay_id: "02020202".to_string(),
-            relay_path: vec![
-                gw::MeshHeartbeatRelayPath {
-                    relay_id: "01020304".into(),
-                    rssi: -120,
-                    snr: -12,
-                },
-                gw::MeshHeartbeatRelayPath {
-                    relay_id: "05060708".into(),
-                    rssi: -120,
-                    snr: -12,
-                },
-            ],
+            events: vec![gw::MeshEvent {
+                event: Some(gw::mesh_event::Event::Heartbeat(gw::MeshEventHeartbeat {
+                    relay_path: vec![
+                        gw::MeshEventHeartbeatRelayPath {
+                            relay_id: "01020304".into(),
+                            rssi: -120,
+                            snr: -12,
+                        },
+                        gw::MeshEventHeartbeatRelayPath {
+                            relay_id: "05060708".into(),
+                            rssi: -120,
+                            snr: -12,
+                        },
+                    ],
+                },)),
+            },],
         },
-        mesh_heartbeat
+        mesh_event
     );
 }

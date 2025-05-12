@@ -13,8 +13,8 @@ use crate::{
     config::{self, Configuration},
     helpers,
     packets::{
-        self, DownlinkMetadata, MeshPacket, Payload, PayloadType, UplinkMetadata, UplinkPayload,
-        MHDR,
+        self, DownlinkMetadata, Event, MeshPacket, Payload, PayloadType, UplinkMetadata,
+        UplinkPayload, MHDR,
     },
     proxy,
 };
@@ -28,15 +28,15 @@ static PAYLOAD_CACHE: LazyLock<Mutex<Cache<PayloadCache>>> =
     LazyLock::new(|| Mutex::new(Cache::new(64)));
 
 // Handle LoRaWAN payload (non-proprietary).
-pub async fn handle_uplink(border_gateway: bool, pl: gw::UplinkFrame) -> Result<()> {
+pub async fn handle_uplink(border_gateway: bool, pl: &gw::UplinkFrame) -> Result<()> {
     match border_gateway {
-        true => proxy_uplink_lora_packet(&pl).await,
-        false => relay_uplink_lora_packet(&pl).await,
+        true => proxy_uplink_lora_packet(pl).await,
+        false => relay_uplink_lora_packet(pl).await,
     }
 }
 
 // Handle Proprietary LoRaWAN payload (mesh encapsulated).
-pub async fn handle_mesh(border_gateway: bool, pl: gw::UplinkFrame) -> Result<()> {
+pub async fn handle_mesh(border_gateway: bool, pl: &gw::UplinkFrame) -> Result<()> {
     let conf = config::get();
     let packet = MeshPacket::from_slice(&pl.phy_payload)?;
     if !packet.validate_mic(conf.mesh.signing_key)? {
@@ -58,7 +58,7 @@ pub async fn handle_mesh(border_gateway: bool, pl: gw::UplinkFrame) -> Result<()
         // Proxy relayed uplink
         true => match packet.mhdr.payload_type {
             PayloadType::Uplink => proxy_uplink_mesh_packet(&pl, packet).await,
-            PayloadType::Heartbeat => proxy_heartbeat_mesh_packet(&pl, packet).await,
+            PayloadType::Event => proxy_event_mesh_packet(&pl, packet).await,
             _ => Ok(()),
         },
         false => relay_mesh_packet(&pl, packet).await,
@@ -76,17 +76,17 @@ pub async fn handle_downlink(pl: gw::DownlinkFrame) -> Result<gw::DownlinkTxAck>
         if tx_info.context.len() != CTX_PREFIX.len() + 6
             || !tx_info.context[0..CTX_PREFIX.len()].eq(&CTX_PREFIX)
         {
-            return proxy_downlink_lora_packet(&pl).await;
+            return proxy_downlink_lora_packet(pl).await;
         }
     }
 
     relay_downlink_lora_packet(&pl).await
 }
 
-async fn proxy_downlink_lora_packet(pl: &gw::DownlinkFrame) -> Result<gw::DownlinkTxAck> {
+async fn proxy_downlink_lora_packet(pl: gw::DownlinkFrame) -> Result<gw::DownlinkTxAck> {
     info!(
         "Proxying LoRaWAN downlink, downlink: {}",
-        helpers::format_downlink(pl)?
+        helpers::format_downlink(&pl)?
     );
     backend::send_downlink(pl).await
 }
@@ -96,7 +96,12 @@ async fn proxy_uplink_lora_packet(pl: &gw::UplinkFrame) -> Result<()> {
         "Proxying LoRaWAN uplink, uplink: {}",
         helpers::format_uplink(pl)?
     );
-    proxy::send_uplink(pl).await
+
+    let pl = gw::Event {
+        event: Some(gw::event::Event::UplinkFrame(pl.clone())),
+    };
+
+    proxy::send_event(pl).await
 }
 
 async fn proxy_uplink_mesh_packet(pl: &gw::UplinkFrame, packet: MeshPacket) -> Result<()> {
@@ -150,39 +155,65 @@ async fn proxy_uplink_mesh_packet(pl: &gw::UplinkFrame, packet: MeshPacket) -> R
     // Set original PHYPayload.
     pl.phy_payload.clone_from(&mesh_pl.phy_payload);
 
-    proxy::send_uplink(&pl).await
+    let pl = gw::Event {
+        event: Some(gw::event::Event::UplinkFrame(pl)),
+    };
+
+    proxy::send_event(pl).await
 }
 
-async fn proxy_heartbeat_mesh_packet(pl: &gw::UplinkFrame, packet: MeshPacket) -> Result<()> {
+async fn proxy_event_mesh_packet(pl: &gw::UplinkFrame, packet: MeshPacket) -> Result<()> {
     let mesh_pl = match &packet.payload {
-        Payload::Heartbeat(v) => v,
+        Payload::Event(v) => v,
         _ => {
             return Err(anyhow!("Expected Heartbeat payload"));
         }
     };
 
     info!(
-        "Unwrapping relay heartbeat packet, uplink_id: {}, mesh_packet: {}",
+        "Unwrapping relay event packet, uplink_id: {}, mesh_packet: {}",
         pl.rx_info.as_ref().map(|v| v.uplink_id).unwrap_or_default(),
         packet
     );
 
-    let heartbeat_pl = gw::MeshHeartbeat {
-        gateway_id: hex::encode(backend::get_gateway_id().await?),
-        relay_id: hex::encode(mesh_pl.relay_id),
-        relay_path: mesh_pl
-            .relay_path
-            .iter()
-            .map(|v| gw::MeshHeartbeatRelayPath {
-                relay_id: hex::encode(v.relay_id),
-                rssi: v.rssi.into(),
-                snr: v.snr.into(),
-            })
-            .collect(),
-        time: Some(mesh_pl.timestamp.into()),
+    let event = gw::Event {
+        event: Some(gw::event::Event::Mesh(gw::Mesh {
+            gateway_id: hex::encode(backend::get_gateway_id().await?),
+            relay_id: hex::encode(mesh_pl.relay_id),
+            time: Some(mesh_pl.timestamp.into()),
+            events: mesh_pl
+                .events
+                .iter()
+                .map(|e| gw::MeshEvent {
+                    event: Some(match e {
+                        Event::Heartbeat(v) => {
+                            gw::mesh_event::Event::Heartbeat(gw::MeshEventHeartbeat {
+                                relay_path: v
+                                    .relay_path
+                                    .iter()
+                                    .map(|v| gw::MeshEventHeartbeatRelayPath {
+                                        relay_id: hex::encode(v.relay_id),
+                                        rssi: v.rssi.into(),
+                                        snr: v.snr.into(),
+                                    })
+                                    .collect(),
+                            })
+                        }
+                        Event::Proprietary(v) => {
+                            gw::mesh_event::Event::Proprietary(gw::MeshEventProprietary {
+                                event_type: v.0.into(),
+                                payload: v.1.clone(),
+                            })
+                        }
+                    }),
+                })
+                .collect(),
+        })),
     };
 
-    proxy::send_mesh_heartbeat(&heartbeat_pl).await
+    proxy::send_event(event).await?;
+
+    Ok(())
 }
 
 async fn relay_mesh_packet(pl: &gw::UplinkFrame, mut packet: MeshPacket) -> Result<()> {
@@ -238,10 +269,10 @@ async fn relay_mesh_packet(pl: &gw::UplinkFrame, mut packet: MeshPacket) -> Resu
                     "Unwrapping relayed downlink, downlink_id: {}, mesh_packet: {}",
                     pl.downlink_id, packet
                 );
-                return helpers::tx_ack_to_err(&backend::send_downlink(&pl).await?);
+                return helpers::tx_ack_to_err(&backend::send_downlink(pl).await?);
             }
         }
-        packets::Payload::Heartbeat(pl) => {
+        packets::Payload::Event(pl) => {
             if pl.relay_id == relay_id {
                 trace!("Dropping packet as this relay was the sender");
 
@@ -249,12 +280,16 @@ async fn relay_mesh_packet(pl: &gw::UplinkFrame, mut packet: MeshPacket) -> Resu
                 return Ok(());
             }
 
-            // Add our Relay ID to the path.
-            pl.relay_path.push(packets::RelayPath {
-                relay_id,
-                rssi: rx_info.rssi as i16,
-                snr: rx_info.snr as i8,
-            });
+            for event in &mut pl.events {
+                // Add our Relay ID to the path in case of heartbeat event.
+                if let Event::Heartbeat(v) = event {
+                    v.relay_path.push(packets::RelayPath {
+                        relay_id,
+                        rssi: rx_info.rssi as i16,
+                        snr: rx_info.snr as i8,
+                    });
+                }
+            }
         }
     }
 
@@ -299,7 +334,7 @@ async fn relay_mesh_packet(pl: &gw::UplinkFrame, mut packet: MeshPacket) -> Resu
         "Re-relaying mesh packet, downlink_id: {}, mesh_packet: {}",
         pl.downlink_id, packet
     );
-    backend::mesh(&pl).await
+    backend::mesh(pl).await
 }
 
 async fn relay_uplink_lora_packet(pl: &gw::UplinkFrame) -> Result<()> {
@@ -366,7 +401,7 @@ async fn relay_uplink_lora_packet(pl: &gw::UplinkFrame) -> Result<()> {
         rx_info.uplink_id, pl.downlink_id, packet,
     );
 
-    backend::mesh(&pl).await
+    backend::mesh(pl).await
 }
 
 async fn relay_downlink_lora_packet(pl: &gw::DownlinkFrame) -> Result<gw::DownlinkTxAck> {
@@ -465,7 +500,7 @@ async fn relay_downlink_lora_packet(pl: &gw::DownlinkFrame) -> Result<gw::Downli
             pl.downlink_id, packet
         );
 
-        match backend::mesh(&pl).await {
+        match backend::mesh(pl).await {
             Ok(_) => {
                 tx_ack_items[i].status = gw::TxAckStatus::Ok.into();
                 break;
