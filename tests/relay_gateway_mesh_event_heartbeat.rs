@@ -8,7 +8,7 @@ use chirpstack_api::prost::Message;
 use chirpstack_gateway_mesh::packets;
 use zeromq::SocketRecv;
 
-use chirpstack_gateway_mesh::heartbeat;
+use chirpstack_gateway_mesh::events;
 
 mod common;
 
@@ -16,9 +16,9 @@ mod common;
     This tests the scenario when the Relay Gateway sends its periodic heartbeat.
 */
 #[tokio::test]
-async fn test_relay_gateway_mesh_heartbeat() {
+async fn test_relay_gateway_mesh_event_heartbeat() {
     common::setup(false).await;
-    let _ = heartbeat::report_heartbeat().await;
+    let _ = events::report_heartbeat().await;
 
     // We expect the heartbeat to be received by the mesh concentratord as
     // a downlink frame.

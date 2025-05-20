@@ -69,6 +69,16 @@ impl From<&packets::MeshPacket> for PayloadCache {
                     .unwrap_or_default()
                     .as_secs() as u32,
             },
+            packets::Payload::Command(v) => PayloadCache {
+                p_type,
+                uplink_id: 0,
+                relay_id: v.relay_id,
+                timestamp: v
+                    .timestamp
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs() as u32,
+            },
         }
     }
 }

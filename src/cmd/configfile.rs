@@ -37,12 +37,6 @@ pub fn run() {
   # uplinks and forward these to the proxy API, rather than relaying these.
   border_gateway={{ mesh.border_gateway }}
 
-  # Heartbeat interval (Relay Gateway only).
-  #
-  # This defines the interval in which a Relay Gateway (border_gateway=false)
-  # will emit heartbeat messages.
-  heartbeat_interval="{{ mesh.heartbeat_interval }}"
-
   # Max hop count.
   #
   # This defines the maximum number of hops a relayed payload will pass.
@@ -142,6 +136,63 @@ pub fn run() {
 
     # Command API URL.
     command_url="{{ backend.mesh_concentratord.command_url }}"
+
+
+# Events configuration (Relay only).
+[events]
+
+  # Heartbeat interval (Relay Gateway only).
+  #
+  # This defines the interval in which a Relay Gateway (border_gateway=false)
+  # will emit heartbeat messages.
+  heartbeat_interval="{{ events.heartbeat_interval }}"
+
+  # Commands.
+  #
+  # This configures for each event type the command that must be executed. The
+  # stdout of the command will be used as event payload. Example:
+  #
+  #   128 = ["/path/to/command", "arg1", "arg2"]
+  #
+  [events.commands]
+
+    {{#each events.commands}}
+    {{@key}} = [{{#each this}}"{{this}}", {{/each}}]
+    {{/each}}
+
+  # Event sets (can be repeated).
+  #
+  # This configures sets of events that will be periodically sent by the
+  # relay. Example:
+  #
+  #  [[events.sets]]
+  #    interval = "5min"
+  #    events = [128, 129, 130]
+  #
+  {{#each events.sets}}
+  [[events.sets]]
+    interval = "{{this.interval}}"
+    events = [{{#each this.events}}{{this}}, {{/each}}]
+  {{/each}}
+
+
+# Commands configuration (Relay only).
+[commands]
+
+  # Commands.
+  #
+  # On receiving a command, the Gateway Mesh will execute the command matching
+  # the command type (128 - 255 is for proprietary commands). The payload will
+  # be provided to the command using stdin. The returned stdout will be sent
+  # back as event (using the same type). Example:
+  #
+  #   "129" = ["/path/to/command", "arg1", "arg2"]
+  #
+  [events.commands]
+
+    {{#each events.commands}}
+    {{@key}} = [{{#each this}}"{{this}}", {{/each}}]
+    {{/each}}
 "#;
 
     let conf = config::get();

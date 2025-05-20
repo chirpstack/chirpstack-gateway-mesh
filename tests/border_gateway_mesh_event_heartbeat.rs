@@ -84,7 +84,7 @@ async fn test_border_gateway_mesh_heartbeat() {
     }
 
     // We expect to receive a Mesh Event.
-    let mesh_event: gw::Mesh = {
+    let mesh_event: gw::MeshEvent = {
         let mut event_sock = common::FORWARDER_EVENT_SOCK.get().unwrap().lock().await;
         let msg = event_sock.recv().await.unwrap();
         let event = gw::Event::decode(msg.get(0).cloned().unwrap()).unwrap();
@@ -97,25 +97,27 @@ async fn test_border_gateway_mesh_heartbeat() {
     };
 
     assert_eq!(
-        gw::Mesh {
+        gw::MeshEvent {
             gateway_id: "0101010101010101".to_string(),
             time: Some(UNIX_EPOCH.into()),
             relay_id: "02020202".to_string(),
-            events: vec![gw::MeshEvent {
-                event: Some(gw::mesh_event::Event::Heartbeat(gw::MeshEventHeartbeat {
-                    relay_path: vec![
-                        gw::MeshEventHeartbeatRelayPath {
-                            relay_id: "01020304".into(),
-                            rssi: -120,
-                            snr: -12,
-                        },
-                        gw::MeshEventHeartbeatRelayPath {
-                            relay_id: "05060708".into(),
-                            rssi: -120,
-                            snr: -12,
-                        },
-                    ],
-                },)),
+            events: vec![gw::MeshEventItem {
+                event: Some(gw::mesh_event_item::Event::Heartbeat(
+                    gw::MeshEventHeartbeat {
+                        relay_path: vec![
+                            gw::MeshEventHeartbeatRelayPath {
+                                relay_id: "01020304".into(),
+                                rssi: -120,
+                                snr: -12,
+                            },
+                            gw::MeshEventHeartbeatRelayPath {
+                                relay_id: "05060708".into(),
+                                rssi: -120,
+                                snr: -12,
+                            },
+                        ],
+                    },
+                )),
             },],
         },
         mesh_event

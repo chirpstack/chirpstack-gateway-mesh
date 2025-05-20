@@ -65,6 +65,9 @@ impl MeshPacket {
                     Payload::Downlink(DownlinkPayload::from_slice(&b[1..len - 4])?)
                 }
                 PayloadType::Event => Payload::Event(EventPayload::from_slice(&b[1..len - 4])?),
+                PayloadType::Command => {
+                    Payload::Command(CommandPayload::from_slice(&b[1..len - 4])?)
+                }
             },
             mic: Some(mic),
             mhdr,
@@ -77,6 +80,7 @@ impl MeshPacket {
             Payload::Uplink(v) => v.to_vec()?,
             Payload::Downlink(v) => v.to_vec()?,
             Payload::Event(v) => v.to_vec()?,
+            Payload::Command(v) => v.to_vec()?,
         });
 
         if let Some(mic) = self.mic {
@@ -94,6 +98,7 @@ impl MeshPacket {
             Payload::Uplink(v) => v.to_vec()?,
             Payload::Downlink(v) => v.to_vec()?,
             Payload::Event(v) => v.to_vec()?,
+            Payload::Command(v) => v.to_vec()?,
         });
 
         Ok(b)
@@ -160,6 +165,14 @@ impl fmt::Display for MeshPacket {
                 v.timestamp,
                 hex::encode(v.relay_id),
             ),
+            Payload::Command(v) => write!(
+                f,
+                "[{:?} hop_count: {}, timestamp: {:?}, relay_id: {}]",
+                self.mhdr.payload_type,
+                self.mhdr.hop_count,
+                v.timestamp,
+                hex::encode(v.relay_id),
+            ),
         }
     }
 }
@@ -200,6 +213,7 @@ pub enum PayloadType {
     Uplink,
     Downlink,
     Event,
+    Command,
 }
 
 impl PayloadType {
@@ -208,6 +222,7 @@ impl PayloadType {
             0x00 => PayloadType::Uplink,
             0x01 => PayloadType::Downlink,
             0x02 => PayloadType::Event,
+            0x03 => PayloadType::Command,
             _ => return Err(anyhow!("Unexpected PayloadType: {}", b)),
         })
     }
@@ -217,6 +232,7 @@ impl PayloadType {
             PayloadType::Uplink => 0x00,
             PayloadType::Downlink => 0x01,
             PayloadType::Event => 0x02,
+            PayloadType::Command => 0x03,
         }
     }
 }
@@ -226,6 +242,7 @@ pub enum Payload {
     Uplink(UplinkPayload),
     Downlink(DownlinkPayload),
     Event(EventPayload),
+    Command(CommandPayload),
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -585,6 +602,95 @@ impl RelayPath {
                 self.snr as u8
             },
         ])
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct CommandPayload {
+    pub timestamp: SystemTime,
+    pub relay_id: [u8; 4],
+    pub commands: Vec<Command>,
+}
+
+impl CommandPayload {
+    pub fn from_slice(b: &[u8]) -> Result<CommandPayload> {
+        let b_len = b.len() as u64;
+        let mut cur = Cursor::new(b);
+        let mut ts_b: [u8; 4] = [0; 4];
+
+        cur.read_exact(&mut ts_b)?;
+        let timestamp = u32::from_be_bytes(ts_b);
+        let timestamp = UNIX_EPOCH
+            .checked_add(Duration::from_secs(timestamp.into()))
+            .ok_or_else(|| anyhow!("Invalid timestamp"))?;
+
+        let mut relay_id: [u8; 4] = [0; 4];
+        cur.read_exact(&mut relay_id)?;
+
+        let mut commands = Vec::new();
+        while cur.position() < b_len {
+            match Command::decode(&mut cur) {
+                Ok(v) => commands.push(v),
+                Err(e) => warn!("Decode command error: {}", e),
+            }
+        }
+
+        Ok(CommandPayload {
+            timestamp,
+            relay_id,
+            commands,
+        })
+    }
+
+    pub fn to_vec(&self) -> Result<Vec<u8>> {
+        let timestamp = self.timestamp.duration_since(UNIX_EPOCH)?.as_secs() as u32;
+        let mut b = timestamp.to_be_bytes().to_vec();
+        b.extend_from_slice(&self.relay_id);
+
+        for cmd in &self.commands {
+            b.extend_from_slice(&cmd.encode()?);
+        }
+
+        Ok(b)
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum Command {
+    Proprietary((u8, Vec<u8>)),
+}
+
+impl Command {
+    pub fn decode(cur: &mut Cursor<&[u8]>) -> Result<Self> {
+        let mut tag_length: [u8; 2] = [0; 2];
+        cur.read_exact(&mut tag_length)?;
+
+        let mut value = vec![0; tag_length[1] as usize];
+        cur.read_exact(&mut value)?;
+
+        Ok(match tag_length[0] {
+            // Add known types here
+            _ => Command::Proprietary((tag_length[0], value)),
+        })
+    }
+
+    pub fn encode(&self) -> Result<Vec<u8>> {
+        let (t, v) = match self {
+            Command::Proprietary((t, v)) => (*t, v.clone()),
+        };
+
+        let mut b = Vec::with_capacity(2 + v.len());
+        b.push(t);
+        b.push(v.len() as u8);
+        b.extend_from_slice(&v);
+
+        Ok(b)
+    }
+
+    pub fn get_type(&self) -> u8 {
+        match self {
+            Command::Proprietary((typ, _)) => *typ,
+        }
     }
 }
 
@@ -1138,6 +1244,35 @@ mod test {
             vec![59, 154, 202, 0, 1, 2, 3, 4, 0, 12, 5, 6, 7, 8, 120, 52, 9, 10, 11, 12, 120, 52],
             b
         );
+    }
+
+    #[test]
+    fn test_proprietary_command_from_slice() {
+        let b = vec![59, 154, 202, 0, 1, 2, 3, 4, 128, 4, 4, 3, 2, 1];
+        let cmd_pl = CommandPayload::from_slice(&b).unwrap();
+        assert_eq!(
+            CommandPayload {
+                timestamp: UNIX_EPOCH
+                    .checked_add(Duration::from_secs(1_000_000_000))
+                    .unwrap(),
+                relay_id: [1, 2, 3, 4],
+                commands: vec![Command::Proprietary((128, vec![4, 3, 2, 1]))],
+            },
+            cmd_pl
+        );
+    }
+
+    #[test]
+    fn test_proprietary_command_to_vec() {
+        let cmd_pl = CommandPayload {
+            timestamp: UNIX_EPOCH
+                .checked_add(Duration::from_secs(1_000_000_000))
+                .unwrap(),
+            relay_id: [1, 2, 3, 4],
+            commands: vec![Command::Proprietary((128, vec![4, 3, 2, 1]))],
+        };
+        let b = cmd_pl.to_vec().unwrap();
+        assert_eq!(vec![59, 154, 202, 0, 1, 2, 3, 4, 128, 4, 4, 3, 2, 1], b);
     }
 
     #[test]

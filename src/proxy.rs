@@ -149,6 +149,11 @@ async fn handle_command(cmd: gw::Command) -> Result<Vec<u8>> {
             }
             .encode_to_vec()
         }
+        Some(gw::command::Command::Mesh(v)) => {
+            info!("Mesh command received");
+            mesh::send_mesh_command(v).await?;
+            Vec::new()
+        }
         _ => return Err(anyhow!("Unexpected command: {:?}", cmd.command)),
     })
 }

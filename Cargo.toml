@@ -32,6 +32,8 @@
     "time",
     "fs",
     "sync",
+    "process",
+    "io-util",
   ] }
   hex = "0.4"
   rand = "0.9"

@@ -30,7 +30,6 @@ pub fn get_config(border_gateway: bool) -> Configuration {
     Configuration {
         mesh: config::Mesh {
             border_gateway,
-            heartbeat_interval: Duration::ZERO,
             frequencies: vec![868100000],
             data_rate: config::DataRate {
                 modulation: config::Modulation::LORA,
@@ -67,6 +66,23 @@ pub fn get_config(border_gateway: bool) -> Configuration {
                 ..Default::default()
             }],
             tx_power: vec![27, 16],
+        },
+        events: config::Events {
+            heartbeat_interval: Duration::ZERO,
+            commands: [
+                ("128".into(), vec!["echo".into(), "foo".into()]),
+                ("129".into(), vec!["echo".into(), "bar".into()]),
+            ]
+            .iter()
+            .cloned()
+            .collect(),
+            ..Default::default()
+        },
+        commands: config::Commands {
+            commands: [("130".into(), vec!["wc".into(), "-m".into()])]
+                .iter()
+                .cloned()
+                .collect(),
         },
         ..Default::default()
     }

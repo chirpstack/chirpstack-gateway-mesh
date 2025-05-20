@@ -1,6 +1,6 @@
 use std::collections::HashMap;
-use std::sync::LazyLock;
-use std::sync::Mutex;
+use std::sync::{LazyLock, Mutex};
+use std::time::SystemTime;
 
 use anyhow::Result;
 use chirpstack_api::gw;
@@ -10,8 +10,9 @@ use rand::random;
 use crate::{
     backend,
     cache::{Cache, PayloadCache},
+    commands,
     config::{self, Configuration},
-    helpers,
+    events, helpers,
     packets::{
         self, DownlinkMetadata, Event, MeshPacket, Payload, PayloadType, UplinkMetadata,
         UplinkPayload, MHDR,
@@ -81,6 +82,67 @@ pub async fn handle_downlink(pl: gw::DownlinkFrame) -> Result<gw::DownlinkTxAck>
     }
 
     relay_downlink_lora_packet(&pl).await
+}
+
+pub async fn send_mesh_command(pl: gw::MeshCommand) -> Result<()> {
+    let conf = config::get();
+
+    let mut packet = packets::MeshPacket {
+        mhdr: packets::MHDR {
+            payload_type: packets::PayloadType::Command,
+            hop_count: 1,
+        },
+        payload: packets::Payload::Command(packets::CommandPayload {
+            timestamp: SystemTime::now(),
+            relay_id: {
+                let mut relay_id: [u8; 4] = [0; 4];
+                hex::decode_to_slice(&pl.relay_id, &mut relay_id)?;
+                relay_id
+            },
+            commands: pl
+                .commands
+                .iter()
+                .map(|v| match &v.command {
+                    Some(gw::mesh_command_item::Command::Proprietary(v)) => Some(
+                        packets::Command::Proprietary((v.command_type as u8, v.payload.clone())),
+                    ),
+                    None => None,
+                })
+                .flatten()
+                .collect(),
+        }),
+        mic: None,
+    };
+    packet.set_mic(conf.mesh.signing_key)?;
+
+    let pl = gw::DownlinkFrame {
+        downlink_id: random(),
+        items: vec![gw::DownlinkFrameItem {
+            phy_payload: packet.to_vec()?,
+            tx_info: Some(gw::DownlinkTxInfo {
+                frequency: get_mesh_frequency(&conf)?,
+                modulation: Some(helpers::data_rate_to_gw_modulation(
+                    &conf.mesh.data_rate,
+                    false,
+                )),
+                power: conf.mesh.tx_power,
+                timing: Some(gw::Timing {
+                    parameters: Some(gw::timing::Parameters::Immediately(
+                        gw::ImmediatelyTimingInfo {},
+                    )),
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        }],
+        ..Default::default()
+    };
+
+    info!(
+        "Sending mesh packet, downlink_id: {}, mesh_packet: {}",
+        pl.downlink_id, packet
+    );
+    backend::mesh(pl).await
 }
 
 async fn proxy_downlink_lora_packet(pl: gw::DownlinkFrame) -> Result<gw::DownlinkTxAck> {
@@ -177,17 +239,17 @@ async fn proxy_event_mesh_packet(pl: &gw::UplinkFrame, packet: MeshPacket) -> Re
     );
 
     let event = gw::Event {
-        event: Some(gw::event::Event::Mesh(gw::Mesh {
+        event: Some(gw::event::Event::Mesh(gw::MeshEvent {
             gateway_id: hex::encode(backend::get_gateway_id().await?),
             relay_id: hex::encode(mesh_pl.relay_id),
             time: Some(mesh_pl.timestamp.into()),
             events: mesh_pl
                 .events
                 .iter()
-                .map(|e| gw::MeshEvent {
+                .map(|e| gw::MeshEventItem {
                     event: Some(match e {
                         Event::Heartbeat(v) => {
-                            gw::mesh_event::Event::Heartbeat(gw::MeshEventHeartbeat {
+                            gw::mesh_event_item::Event::Heartbeat(gw::MeshEventHeartbeat {
                                 relay_path: v
                                     .relay_path
                                     .iter()
@@ -200,7 +262,7 @@ async fn proxy_event_mesh_packet(pl: &gw::UplinkFrame, packet: MeshPacket) -> Re
                             })
                         }
                         Event::Proprietary(v) => {
-                            gw::mesh_event::Event::Proprietary(gw::MeshEventProprietary {
+                            gw::mesh_event_item::Event::Proprietary(gw::MeshEventProprietary {
                                 event_type: v.0.into(),
                                 payload: v.1.clone(),
                             })
@@ -289,6 +351,20 @@ async fn relay_mesh_packet(pl: &gw::UplinkFrame, mut packet: MeshPacket) -> Resu
                         snr: rx_info.snr as i8,
                     });
                 }
+            }
+        }
+        packets::Payload::Command(pl) => {
+            if pl.relay_id == relay_id {
+                // The command payload was intended for this gateway, execute
+                // the commands.
+                let resp = commands::execute_commands(&pl).await?;
+
+                // Send back the responses (events).
+                if !resp.is_empty() {
+                    events::send_events(resp).await?;
+                }
+
+                return Ok(());
             }
         }
     }

@@ -113,14 +113,14 @@ async fn test_relay_gateway_uplink_mesh() {
     // Publish the uplink one more time, this time we expect that it will be discarded.
     {
         let mut event_sock = common::MESH_BACKEND_EVENT_SOCK.get().unwrap().lock().await;
+        let event = gw::Event {
+            event: Some(gw::event::Event::UplinkFrame(up.clone())),
+        };
         event_sock
             .send(
-                vec![
-                    bytes::Bytes::from("up"),
-                    bytes::Bytes::from(up.encode_to_vec()),
-                ]
-                .try_into()
-                .unwrap(),
+                vec![bytes::Bytes::from(event.encode_to_vec())]
+                    .try_into()
+                    .unwrap(),
             )
             .await
             .unwrap();

@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 use std::{env, fs};
@@ -18,6 +19,7 @@ pub struct Configuration {
     pub backend: Backend,
     pub mappings: Mappings,
     pub events: Events,
+    pub commands: Commands,
 }
 
 impl Configuration {
@@ -158,14 +160,32 @@ pub struct DataRate {
 pub struct Events {
     #[serde(with = "humantime_serde")]
     pub heartbeat_interval: Duration,
+    pub commands: HashMap<String, Vec<String>>,
+    pub sets: Vec<EventsSet>,
 }
 
 impl Default for Events {
     fn default() -> Self {
         Events {
             heartbeat_interval: Duration::from_secs(300),
+            commands: Default::default(),
+            sets: Vec::new(),
         }
     }
+}
+
+#[derive(Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default)]
+pub struct EventsSet {
+    #[serde(with = "humantime_serde")]
+    pub interval: Duration,
+    pub events: Vec<u8>,
+}
+
+#[derive(Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default)]
+pub struct Commands {
+    pub commands: HashMap<String, Vec<String>>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
