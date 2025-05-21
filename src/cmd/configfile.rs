@@ -188,9 +188,9 @@ pub fn run() {
   #
   #   "129" = ["/path/to/command", "arg1", "arg2"]
   #
-  [events.commands]
+  [commands.commands]
 
-    {{#each events.commands}}
+    {{#each commands.commands}}
     {{@key}} = [{{#each this}}"{{this}}", {{/each}}]
     {{/each}}
 "#;
