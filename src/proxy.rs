@@ -43,7 +43,7 @@ pub async fn setup(conf: &Configuration) -> Result<()> {
             sock.bind(&event_bind).unwrap();
 
             while let Some(event) = event_rx.blocking_recv() {
-                sock.send(&event.encode_to_vec(), 0).unwrap();
+                sock.send(event.encode_to_vec(), 0).unwrap();
             }
         }
     });
@@ -145,7 +145,7 @@ async fn handle_command(cmd: gw::Command) -> Result<Vec<u8>> {
         Some(gw::command::Command::GetGatewayId(_)) => {
             info!("Get gateway id command received");
             gw::GetGatewayIdResponse {
-                gateway_id: hex::encode(&backend::get_gateway_id().await.unwrap_or_default()),
+                gateway_id: hex::encode(backend::get_gateway_id().await.unwrap_or_default()),
             }
             .encode_to_vec()
         }

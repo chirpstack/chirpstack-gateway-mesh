@@ -66,11 +66,11 @@ pub async fn handle_mesh(border_gateway: bool, pl: &gw::UplinkFrame) -> Result<(
     match border_gateway {
         // Proxy relayed uplink
         true => match packet.mhdr.payload_type {
-            PayloadType::Uplink => proxy_uplink_mesh_packet(&pl, packet).await,
-            PayloadType::Event => proxy_event_mesh_packet(&pl, packet).await,
+            PayloadType::Uplink => proxy_uplink_mesh_packet(pl, packet).await,
+            PayloadType::Event => proxy_event_mesh_packet(pl, packet).await,
             _ => Ok(()),
         },
-        false => relay_mesh_packet(&pl, packet).await,
+        false => relay_mesh_packet(pl, packet).await,
     }
 }
 
@@ -110,13 +110,7 @@ pub async fn send_mesh_command(pl: gw::MeshCommand) -> Result<()> {
             commands: pl
                 .commands
                 .iter()
-                .map(|v| match &v.command {
-                    Some(gw::mesh_command_item::Command::Proprietary(v)) => Some(
-                        packets::Command::Proprietary((v.command_type as u8, v.payload.clone())),
-                    ),
-                    None => None,
-                })
-                .flatten()
+                .filter_map(|v| v.command.as_ref().map(|gw::mesh_command_item::Command::Proprietary(v)| packets::Command::Proprietary((v.command_type as u8, v.payload.clone()))))
                 .collect(),
         }),
         mic: None,
@@ -371,7 +365,7 @@ async fn relay_mesh_packet(pl: &gw::UplinkFrame, mut packet: MeshPacket) -> Resu
             if pl.relay_id == relay_id {
                 // The command payload was intended for this gateway, execute
                 // the commands.
-                let resp = commands::execute_commands(&pl).await?;
+                let resp = commands::execute_commands(pl).await?;
 
                 // Send back the responses (events).
                 if !resp.is_empty() {

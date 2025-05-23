@@ -846,10 +846,7 @@ impl Command {
         let mut value = vec![0; tag_length[1] as usize];
         cur.read_exact(&mut value)?;
 
-        Ok(match tag_length[0] {
-            // Add known types here
-            _ => Command::Proprietary((tag_length[0], value)),
-        })
+        Ok(Command::Proprietary((tag_length[0], value)))
     }
 
     pub fn encode(&self) -> Result<Vec<u8>> {

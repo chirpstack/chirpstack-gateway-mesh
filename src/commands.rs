@@ -101,12 +101,11 @@ async fn execute_proprietary(typ: u8, value: &[u8]) -> Result<packets::Event> {
 }
 
 async fn get_last_timestamp() -> Option<SystemTime> {
-    LAST_TIMESTAMP
+    *LAST_TIMESTAMP
         .get_or_init(|| async { Mutex::new(None) })
         .await
         .lock()
         .await
-        .clone()
 }
 
 async fn set_last_timestamp(ts: SystemTime) {

@@ -297,7 +297,7 @@ async fn handle_event_msg(
                     )
                 }
 
-                info!("Frame received - {}", helpers::format_uplink(&v)?);
+                info!("Frame received - {}", helpers::format_uplink(v)?);
                 mesh::handle_uplink(border_gateway, v).await?;
             }
         }
@@ -315,26 +315,23 @@ async fn handle_event_msg(
 async fn handle_mesh_event_msg(border_gateway: bool, event: gw::Event) -> Result<()> {
     trace!("Handling mesh event, event: {:?}", event);
 
-    match &event.event {
-        Some(gw::event::Event::UplinkFrame(v)) => {
-            if let Some(rx_info) = &v.rx_info {
-                // Filter out frames with invalid CRC.
-                if rx_info.crc_status() != gw::CrcStatus::CrcOk {
-                    debug!(
-                        "Discarding uplink, CRC != OK, uplink_id: {}",
-                        rx_info.uplink_id
-                    );
-                    return Ok(());
-                }
-            }
-
-            // The mesh event msg must always be a proprietary payload.
-            if v.phy_payload.first().cloned().unwrap_or_default() & 0xe0 == 0xe0 {
-                info!("Mesh frame received - {}", helpers::format_uplink(v)?);
-                mesh::handle_mesh(border_gateway, v).await?;
+    if let Some(gw::event::Event::UplinkFrame(v)) = &event.event {
+        if let Some(rx_info) = &v.rx_info {
+            // Filter out frames with invalid CRC.
+            if rx_info.crc_status() != gw::CrcStatus::CrcOk {
+                debug!(
+                    "Discarding uplink, CRC != OK, uplink_id: {}",
+                    rx_info.uplink_id
+                );
+                return Ok(());
             }
         }
-        _ => {}
+
+        // The mesh event msg must always be a proprietary payload.
+        if v.phy_payload.first().cloned().unwrap_or_default() & 0xe0 == 0xe0 {
+            info!("Mesh frame received - {}", helpers::format_uplink(v)?);
+            mesh::handle_mesh(border_gateway, v).await?;
+        }
     }
 
     Ok(())
