@@ -52,6 +52,7 @@ pub async fn execute_commands(pl: &packets::CommandPayload) -> Result<Vec<packet
     for cmd in &pl.commands {
         let resp = match cmd {
             packets::Command::Proprietary((t, v)) => execute_proprietary(*t, v).await,
+            packets::Command::Encrypted(_) => panic!("Commands must be decrypted first"),
         };
 
         match resp {

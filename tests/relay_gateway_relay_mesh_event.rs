@@ -9,7 +9,7 @@ use chirpstack_gateway_mesh::packets;
 use tokio::time::{timeout, Duration};
 use zeromq::{SocketRecv, SocketSend};
 
-use chirpstack_gateway_mesh::aes128::Aes128Key;
+use chirpstack_gateway_mesh::aes128::{get_encryption_key, get_signing_key, Aes128Key};
 
 mod common;
 
@@ -35,7 +35,10 @@ async fn test_relay_gateway_relay_mesh_heartbeat() {
         }),
         mic: None,
     };
-    packet.set_mic(Aes128Key::null()).unwrap();
+    packet
+        .encrypt(get_encryption_key(Aes128Key::null()))
+        .unwrap();
+    packet.set_mic(get_signing_key(Aes128Key::null())).unwrap();
 
     let up = gw::UplinkFrame {
         phy_payload: packet.to_vec().unwrap(),
@@ -95,8 +98,14 @@ async fn test_relay_gateway_relay_mesh_heartbeat() {
     };
 
     let down_item = down.items.first().unwrap();
-    let mesh_packet = packets::Packet::from_slice(&down_item.phy_payload).unwrap();
+    let mut mesh_packet = packets::Packet::from_slice(&down_item.phy_payload).unwrap();
+    if let packets::Packet::Mesh(pl) = &mut mesh_packet {
+        pl.decrypt(get_encryption_key(Aes128Key::null())).unwrap();
+    }
 
+    packet
+        .decrypt(get_encryption_key(Aes128Key::null()))
+        .unwrap();
     packet.mhdr.hop_count += 1;
     if let packets::Payload::Event(v) = &mut packet.payload {
         for event in &mut v.events {
@@ -109,8 +118,13 @@ async fn test_relay_gateway_relay_mesh_heartbeat() {
             }
         }
     }
-    packet.set_mic(Aes128Key::null()).unwrap();
-
+    packet
+        .encrypt(get_encryption_key(Aes128Key::null()))
+        .unwrap();
+    packet.set_mic(get_signing_key(Aes128Key::null())).unwrap();
+    packet
+        .decrypt(get_encryption_key(Aes128Key::null()))
+        .unwrap();
     assert_eq!(packets::Packet::Mesh(packet), mesh_packet);
 
     // Publish the uplink one more time, this time we expect that it will be discarded.

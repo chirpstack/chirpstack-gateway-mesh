@@ -8,6 +8,7 @@ use log::{info, trace, warn};
 use rand::random;
 
 use crate::{
+    aes128::{get_encryption_key, get_signing_key, Aes128Key},
     backend,
     cache::{Cache, PayloadCache},
     commands,
@@ -39,8 +40,12 @@ pub async fn handle_uplink(border_gateway: bool, pl: &gw::UplinkFrame) -> Result
 // Handle Proprietary LoRaWAN payload (mesh encapsulated).
 pub async fn handle_mesh(border_gateway: bool, pl: &gw::UplinkFrame) -> Result<()> {
     let conf = config::get();
-    let packet = MeshPacket::from_slice(&pl.phy_payload)?;
-    if !packet.validate_mic(conf.mesh.signing_key)? {
+    let mut packet = MeshPacket::from_slice(&pl.phy_payload)?;
+    if !packet.validate_mic(if conf.mesh.signing_key != Aes128Key::null() {
+        conf.mesh.signing_key
+    } else {
+        get_signing_key(conf.mesh.root_key)
+    })? {
         warn!("Dropping packet, invalid MIC, mesh_packet: {}", packet);
         return Ok(());
     }
@@ -54,6 +59,9 @@ pub async fn handle_mesh(border_gateway: bool, pl: &gw::UplinkFrame) -> Result<(
         );
         return Ok(());
     };
+
+    // Decrypt the packet (in case it contains an encrypted payload).
+    packet.decrypt(get_encryption_key(conf.mesh.root_key))?;
 
     match border_gateway {
         // Proxy relayed uplink
@@ -113,7 +121,12 @@ pub async fn send_mesh_command(pl: gw::MeshCommand) -> Result<()> {
         }),
         mic: None,
     };
-    packet.set_mic(conf.mesh.signing_key)?;
+    packet.encrypt(get_encryption_key(conf.mesh.root_key))?;
+    packet.set_mic(if conf.mesh.signing_key != Aes128Key::null() {
+        conf.mesh.signing_key
+    } else {
+        get_signing_key(conf.mesh.root_key)
+    })?;
 
     let pl = gw::DownlinkFrame {
         downlink_id: random(),
@@ -267,6 +280,7 @@ async fn proxy_event_mesh_packet(pl: &gw::UplinkFrame, packet: MeshPacket) -> Re
                                 payload: v.1.clone(),
                             })
                         }
+                        Event::Encrypted(_) => panic!("Events must be decrypted first"),
                     }),
                 })
                 .collect(),
@@ -375,9 +389,16 @@ async fn relay_mesh_packet(pl: &gw::UplinkFrame, mut packet: MeshPacket) -> Resu
     // Increment hop count.
     packet.mhdr.hop_count += 1;
 
+    // Encrypt.
+    packet.encrypt(get_encryption_key(conf.mesh.root_key))?;
+
     // We need to re-set the MIC as we have changed the payload by incrementing
     // the hop count (and in casee of heartbeat, we have modified the Relay path).
-    packet.set_mic(conf.mesh.signing_key)?;
+    packet.set_mic(if conf.mesh.signing_key != Aes128Key::null() {
+        conf.mesh.signing_key
+    } else {
+        get_signing_key(conf.mesh.root_key)
+    })?;
 
     if packet.mhdr.hop_count > conf.mesh.max_hop_count {
         return Err(anyhow!("Max hop count exceeded"));
@@ -447,7 +468,11 @@ async fn relay_uplink_lora_packet(pl: &gw::UplinkFrame) -> Result<()> {
         }),
         mic: None,
     };
-    packet.set_mic(conf.mesh.signing_key)?;
+    packet.set_mic(if conf.mesh.signing_key != Aes128Key::null() {
+        conf.mesh.signing_key
+    } else {
+        get_signing_key(conf.mesh.root_key)
+    })?;
 
     let pl = gw::DownlinkFrame {
         downlink_id: random(),
@@ -546,7 +571,11 @@ async fn relay_downlink_lora_packet(pl: &gw::DownlinkFrame) -> Result<gw::Downli
             }),
             mic: None,
         };
-        packet.set_mic(conf.mesh.signing_key)?;
+        packet.set_mic(if conf.mesh.signing_key != Aes128Key::null() {
+            conf.mesh.signing_key
+        } else {
+            get_signing_key(conf.mesh.root_key)
+        })?;
 
         let pl = gw::DownlinkFrame {
             downlink_id: pl.downlink_id,

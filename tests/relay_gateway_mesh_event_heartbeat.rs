@@ -8,6 +8,7 @@ use chirpstack_api::prost::Message;
 use chirpstack_gateway_mesh::packets;
 use zeromq::SocketRecv;
 
+use chirpstack_gateway_mesh::aes128::{get_encryption_key, Aes128Key};
 use chirpstack_gateway_mesh::events;
 
 mod common;
@@ -40,6 +41,11 @@ async fn test_relay_gateway_mesh_event_heartbeat() {
 
     let down_item = down.items.first().unwrap();
     let mut mesh_packet = packets::MeshPacket::from_slice(&down_item.phy_payload).unwrap();
+
+    mesh_packet
+        .decrypt(get_encryption_key(Aes128Key::null()))
+        .unwrap();
+
     assert_ne!([0, 0, 0, 0], mesh_packet.mic.unwrap());
     mesh_packet.mic = None;
 

@@ -58,6 +58,7 @@ impl Default for Logging {
 #[derive(Serialize, Deserialize)]
 #[serde(default)]
 pub struct Mesh {
+    pub root_key: Aes128Key,
     pub signing_key: Aes128Key,
     pub frequencies: Vec<u32>,
     pub data_rate: DataRate,
@@ -72,6 +73,7 @@ pub struct Mesh {
 impl Default for Mesh {
     fn default() -> Self {
         Mesh {
+            root_key: Aes128Key::null(),
             signing_key: Aes128Key::null(),
             frequencies: vec![868100000, 868300000, 868500000],
             data_rate: DataRate {

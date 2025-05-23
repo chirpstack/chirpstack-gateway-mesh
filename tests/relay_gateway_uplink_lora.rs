@@ -6,7 +6,7 @@ use chirpstack_api::prost::Message;
 use chirpstack_gateway_mesh::packets;
 use zeromq::{SocketRecv, SocketSend};
 
-use chirpstack_gateway_mesh::aes128::Aes128Key;
+use chirpstack_gateway_mesh::aes128::{get_signing_key, Aes128Key};
 
 mod common;
 
@@ -99,7 +99,7 @@ async fn test_relay_gateway_uplink_lora() {
                 }),
                 mic: None,
             };
-            packet.set_mic(Aes128Key::null()).unwrap();
+            packet.set_mic(get_signing_key(Aes128Key::null())).unwrap();
             packet
         },
         mesh_packet

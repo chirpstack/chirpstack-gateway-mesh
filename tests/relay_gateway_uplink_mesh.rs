@@ -7,7 +7,7 @@ use chirpstack_gateway_mesh::packets;
 use tokio::time::{timeout, Duration};
 use zeromq::{SocketRecv, SocketSend};
 
-use chirpstack_gateway_mesh::aes128::Aes128Key;
+use chirpstack_gateway_mesh::aes128::{get_signing_key, Aes128Key};
 
 mod common;
 
@@ -38,7 +38,7 @@ async fn test_relay_gateway_uplink_mesh() {
             }),
             mic: None,
         };
-        packet.set_mic(Aes128Key::null()).unwrap();
+        packet.set_mic(get_signing_key(Aes128Key::null())).unwrap();
         packet
     });
 
@@ -105,7 +105,7 @@ async fn test_relay_gateway_uplink_mesh() {
     // The hop_count must be incremented.
     if let packets::Packet::Mesh(v) = &mut packet {
         v.mhdr.hop_count += 1;
-        v.set_mic(Aes128Key::null()).unwrap();
+        v.set_mic(get_signing_key(Aes128Key::null())).unwrap();
     }
 
     assert_eq!(packet, mesh_packet);

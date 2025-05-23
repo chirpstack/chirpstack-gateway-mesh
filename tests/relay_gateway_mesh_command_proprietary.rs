@@ -7,7 +7,7 @@ use chirpstack_api::gw;
 use chirpstack_api::prost::Message;
 use zeromq::{SocketRecv, SocketSend};
 
-use chirpstack_gateway_mesh::aes128::Aes128Key;
+use chirpstack_gateway_mesh::aes128::{get_encryption_key, get_signing_key, Aes128Key};
 use chirpstack_gateway_mesh::packets;
 
 mod common;
@@ -36,7 +36,12 @@ async fn test_relay_gateway_mesh_command_proprietary() {
         }),
         mic: None,
     };
-    cmd_packet.set_mic(Aes128Key::null()).unwrap();
+    cmd_packet
+        .encrypt(get_encryption_key(Aes128Key::null()))
+        .unwrap();
+    cmd_packet
+        .set_mic(get_signing_key(Aes128Key::null()))
+        .unwrap();
 
     // The packet that we received from the Border Gateway.
     let up = gw::UplinkFrame {
@@ -100,6 +105,13 @@ async fn test_relay_gateway_mesh_command_proprietary() {
 
     let down_item = down.items.first().unwrap();
     let mut mesh_packet = packets::MeshPacket::from_slice(&down_item.phy_payload).unwrap();
+
+    // Decrypt.
+    mesh_packet
+        .decrypt(get_encryption_key(Aes128Key::null()))
+        .unwrap();
+
+    // MIC.
     assert_ne!([0, 0, 0, 0], mesh_packet.mic.unwrap());
     mesh_packet.mic = None;
 

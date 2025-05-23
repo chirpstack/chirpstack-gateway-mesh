@@ -1,6 +1,10 @@
 use std::fmt;
 use std::str::FromStr;
 
+use aes::{
+    cipher::{generic_array::GenericArray, BlockEncrypt, KeyInit},
+    Aes128, Block,
+};
 use anyhow::{Error, Result};
 use serde::{
     de::{self, Visitor},
@@ -94,4 +98,27 @@ impl Visitor<'_> for Aes128KeyVisitor {
     {
         Aes128Key::from_str(value).map_err(|e| E::custom(format!("{}", e)))
     }
+}
+
+pub fn get_signing_key(key: Aes128Key) -> Aes128Key {
+    let b: [u8; 16] = [0; 16];
+    get_key(key, b)
+}
+
+pub fn get_encryption_key(key: Aes128Key) -> Aes128Key {
+    let mut b: [u8; 16] = [0; 16];
+    b[0] = 0x01;
+    get_key(key, b)
+}
+
+fn get_key(key: Aes128Key, b: [u8; 16]) -> Aes128Key {
+    let key_bytes = key.to_bytes();
+    let key = GenericArray::from_slice(&key_bytes);
+    let cipher = Aes128::new(key);
+
+    let mut b = b;
+    let block = Block::from_mut_slice(&mut b);
+    cipher.encrypt_block(block);
+
+    Aes128Key(b)
 }

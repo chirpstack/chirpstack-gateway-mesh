@@ -24,10 +24,19 @@ pub fn run() {
 
 # Mesh configuration.
 [mesh]
-  # Signing key (AES128, HEX encoded).
+  # Mesh root key (AES128, HEX encoded).
+  #
+  # This key is used to derive the signing and encryption keys. The same key
+  # must be configured on every Border and Relay gateway.
+  root_key="{{ mesh.root_key }}"
+
+  # Signing key (AES128, HEX encoded) (deprecated).
   #
   # This key is used to sign and validate each mesh packet. This key must be
   # configured on every Border / Relay gateway equally.
+  #
+  # Deprecation note: If set, the signing key will not be derrived from the
+  # above root_key, but this key will be used.
   signing_key="{{ mesh.signing_key }}"
 
   # Border Gateway.

@@ -5,7 +5,7 @@ use chirpstack_api::gw;
 use chirpstack_api::prost::Message;
 use zeromq::{SocketRecv, SocketSend};
 
-use chirpstack_gateway_mesh::aes128::Aes128Key;
+use chirpstack_gateway_mesh::aes128::{get_signing_key, Aes128Key};
 use chirpstack_gateway_mesh::packets;
 
 mod common;
@@ -37,7 +37,7 @@ async fn test_border_gateway_uplink_mesh() {
         }),
         mic: None,
     };
-    packet.set_mic(Aes128Key::null()).unwrap();
+    packet.set_mic(get_signing_key(Aes128Key::null())).unwrap();
 
     let up = gw::UplinkFrame {
         phy_payload: packet.to_vec().unwrap(),

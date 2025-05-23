@@ -9,6 +9,7 @@ use tokio::process::Command;
 use tokio::sync::OnceCell;
 use tokio::time::sleep;
 
+use crate::aes128::{get_encryption_key, get_signing_key, Aes128Key};
 use crate::backend;
 use crate::config::{self, Configuration};
 use crate::helpers;
@@ -133,7 +134,8 @@ pub async fn send_events(events: Vec<packets::Event>) -> Result<()> {
         }),
         mic: None,
     };
-    packet.set_mic(conf.mesh.signing_key)?;
+    packet.encrypt(get_encryption_key(Aes128Key::null()))?;
+    packet.set_mic(get_signing_key(conf.mesh.signing_key))?;
 
     let pl = gw::DownlinkFrame {
         downlink_id: random(),

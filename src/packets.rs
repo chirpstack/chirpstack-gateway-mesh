@@ -2,7 +2,10 @@ use std::fmt;
 use std::io::{Cursor, Read};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use aes::Aes128;
+use aes::{
+    cipher::{generic_array::GenericArray, BlockEncrypt},
+    Aes128, Block,
+};
 use anyhow::Result;
 use cmac::{Cmac, Mac};
 use log::warn;
@@ -104,6 +107,24 @@ impl MeshPacket {
         Ok(b)
     }
 
+    pub fn encrypt(&mut self, key: Aes128Key) -> Result<()> {
+        match &mut self.payload {
+            Payload::Event(pl) => pl.encrypt(key),
+            Payload::Command(pl) => pl.encrypt(key),
+            _ => Ok(()),
+        }
+    }
+
+    pub fn decrypt(&mut self, key: Aes128Key) -> Result<()> {
+        match &mut self.payload {
+            Payload::Event(pl) => pl.decrypt(key),
+            Payload::Command(pl) => pl.decrypt(key),
+            _ => Ok(()),
+        }
+    }
+
+    // Calculate and set the message integrity code.
+    // Note: If applicable, the payload must be encrypted first!
     pub fn set_mic(&mut self, key: Aes128Key) -> Result<()> {
         self.mic = Some(self.calculate_mic(key)?);
         Ok(())
@@ -456,11 +477,11 @@ impl EventPayload {
         cur.read_exact(&mut relay_id)?;
 
         let mut events = Vec::new();
-        while cur.position() < b_len {
-            match Event::decode(&mut cur) {
-                Ok(v) => events.push(v),
-                Err(e) => warn!("Decode event error: {}", e),
-            }
+
+        if cur.position() < b_len {
+            let mut b = Vec::new();
+            cur.read_to_end(&mut b)?;
+            events.push(Event::Encrypted(b));
         }
 
         Ok(EventPayload {
@@ -481,10 +502,88 @@ impl EventPayload {
 
         Ok(b)
     }
+
+    pub fn encrypt(&mut self, key: Aes128Key) -> Result<()> {
+        if self.events.is_empty() {
+            return Ok(());
+        }
+
+        // Buffer to encrypt
+        let mut b = Vec::new();
+        for event in &self.events {
+            b.extend_from_slice(&event.encode()?);
+        }
+
+        self.events = vec![Event::Encrypted(encrypt_events_commands(
+            key,
+            false,
+            &self.relay_id,
+            self.timestamp,
+            &b,
+        )?)];
+
+        Ok(())
+    }
+
+    pub fn decrypt(&mut self, key: Aes128Key) -> Result<()> {
+        if self.events.is_empty() {
+            return Ok(());
+        }
+
+        if self.events.len() != 1 {
+            return Err(anyhow!("Exactly 1 event item expected"));
+        }
+
+        if let Event::Encrypted(b) = &self.events[0] {
+            let b = encrypt_events_commands(key, false, &self.relay_id, self.timestamp, b)?;
+            let b_len = b.len() as u64;
+
+            let mut cur = Cursor::new(b.as_slice());
+            let mut events = Vec::new();
+
+            while cur.position() < b_len {
+                match Event::decode(&mut cur) {
+                    Ok(v) => events.push(v),
+                    Err(e) => warn!("Decode event error: {}", e),
+                }
+            }
+
+            self.events = events;
+        } else {
+            return Err(anyhow!("Encrypted event expected"));
+        }
+
+        Ok(())
+    }
+
+    pub fn decode(&mut self) -> Result<()> {
+        if self.events.is_empty() {
+            return Ok(());
+        }
+
+        if let Event::Encrypted(b) = &self.events[0] {
+            let b_len = b.len() as u64;
+
+            let mut cur = Cursor::new(b.as_slice());
+            let mut events = Vec::new();
+
+            while cur.position() < b_len {
+                match Event::decode(&mut cur) {
+                    Ok(v) => events.push(v),
+                    Err(e) => warn!("Decode event error: {}", e),
+                }
+            }
+
+            self.events = events;
+        }
+
+        Ok(())
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Event {
+    Encrypted(Vec<u8>),
     Heartbeat(HeartbeatPayload),
     Proprietary((u8, Vec<u8>)),
 }
@@ -505,6 +604,7 @@ impl Event {
 
     pub fn encode(&self) -> Result<Vec<u8>> {
         let (t, v) = match self {
+            Event::Encrypted(v) => return Ok(v.clone()),
             Event::Heartbeat(v) => (0x00, v.to_vec()?),
             Event::Proprietary((t, v)) => (*t, v.clone()),
         };
@@ -628,11 +728,11 @@ impl CommandPayload {
         cur.read_exact(&mut relay_id)?;
 
         let mut commands = Vec::new();
-        while cur.position() < b_len {
-            match Command::decode(&mut cur) {
-                Ok(v) => commands.push(v),
-                Err(e) => warn!("Decode command error: {}", e),
-            }
+
+        if cur.position() < b_len {
+            let mut b = Vec::new();
+            cur.read_to_end(&mut b)?;
+            commands.push(Command::Encrypted(b));
         }
 
         Ok(CommandPayload {
@@ -653,10 +753,88 @@ impl CommandPayload {
 
         Ok(b)
     }
+
+    pub fn encrypt(&mut self, key: Aes128Key) -> Result<()> {
+        if self.commands.is_empty() {
+            return Ok(());
+        }
+
+        // Buffer to encrypt
+        let mut b = Vec::new();
+        for command in &self.commands {
+            b.extend_from_slice(&command.encode()?);
+        }
+
+        self.commands = vec![Command::Encrypted(encrypt_events_commands(
+            key,
+            true,
+            &self.relay_id,
+            self.timestamp,
+            &b,
+        )?)];
+
+        Ok(())
+    }
+
+    pub fn decrypt(&mut self, key: Aes128Key) -> Result<()> {
+        if self.commands.is_empty() {
+            return Ok(());
+        }
+
+        if self.commands.len() != 1 {
+            return Err(anyhow!("Exactly 1 command item expected"));
+        }
+
+        if let Command::Encrypted(b) = &self.commands[0] {
+            let b = encrypt_events_commands(key, true, &self.relay_id, self.timestamp, b)?;
+            let b_len = b.len() as u64;
+
+            let mut cur = Cursor::new(b.as_slice());
+            let mut commands = Vec::new();
+
+            while cur.position() < b_len {
+                match Command::decode(&mut cur) {
+                    Ok(v) => commands.push(v),
+                    Err(e) => warn!("Decode command error: {}", e),
+                }
+            }
+
+            self.commands = commands;
+        } else {
+            return Err(anyhow!("Encrypted command exepcted"));
+        }
+
+        Ok(())
+    }
+
+    pub fn decode(&mut self) -> Result<()> {
+        if self.commands.is_empty() {
+            return Ok(());
+        }
+
+        if let Command::Encrypted(b) = &self.commands[0] {
+            let b_len = b.len() as u64;
+
+            let mut cur = Cursor::new(b.as_slice());
+            let mut commands = Vec::new();
+
+            while cur.position() < b_len {
+                match Command::decode(&mut cur) {
+                    Ok(v) => commands.push(v),
+                    Err(e) => warn!("Decode command error: {}", e),
+                }
+            }
+
+            self.commands = commands;
+        }
+
+        Ok(())
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Command {
+    Encrypted(Vec<u8>),
     Proprietary((u8, Vec<u8>)),
 }
 
@@ -676,6 +854,7 @@ impl Command {
 
     pub fn encode(&self) -> Result<Vec<u8>> {
         let (t, v) = match self {
+            Command::Encrypted(v) => return Ok(v.clone()),
             Command::Proprietary((t, v)) => (*t, v.clone()),
         };
 
@@ -689,6 +868,7 @@ impl Command {
 
     pub fn get_type(&self) -> u8 {
         match self {
+            Command::Encrypted(_) => 0x00, // this should never be the case
             Command::Proprietary((typ, _)) => *typ,
         }
     }
@@ -731,6 +911,55 @@ pub fn decode_freq(b: &[u8]) -> Result<u32> {
     }
 
     Ok(freq)
+}
+
+pub fn encrypt_events_commands(
+    key: Aes128Key,
+    is_command: bool,
+    relay_id: &[u8],
+    timestamp: SystemTime,
+    payload: &[u8],
+) -> Result<Vec<u8>> {
+    use aes::cipher::KeyInit;
+
+    if payload.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut b = payload.to_vec();
+    let b_len = b.len();
+
+    // Make buffer length multiple of 16.
+    b.append(&mut vec![0; 16 - (b_len % 16)]);
+
+    // Encode timestamp.
+    let timestamp = timestamp.duration_since(UNIX_EPOCH)?.as_secs() as u32;
+
+    let key_bytes = key.to_bytes();
+    let key = GenericArray::from_slice(&key_bytes);
+    let cipher = Aes128::new(key);
+
+    let mut a = vec![0; 16];
+    a[0] = 0x01;
+    if is_command {
+        a[5] = 0x01;
+    }
+    a[6..10].clone_from_slice(relay_id);
+    a[10..14].clone_from_slice(&timestamp.to_be_bytes());
+
+    // Encrypt blocks
+    for i in 0..(b.len() / 16) {
+        a[15] = (i + 1) as u8;
+
+        let mut block = Block::clone_from_slice(&a);
+        cipher.encrypt_block(&mut block);
+
+        for j in 0..16 {
+            b[(i * 16) + j] ^= block[j];
+        }
+    }
+
+    Ok(b[0..b_len].to_vec())
 }
 
 #[cfg(test)]
@@ -1191,7 +1420,9 @@ mod test {
         let b = vec![
             59, 154, 202, 0, 1, 2, 3, 4, 0, 12, 5, 6, 7, 8, 120, 52, 9, 10, 11, 12, 120, 52,
         ];
-        let event_pl = EventPayload::from_slice(&b).unwrap();
+        let mut event_pl = EventPayload::from_slice(&b).unwrap();
+        event_pl.decode().unwrap();
+
         assert_eq!(
             EventPayload {
                 timestamp: UNIX_EPOCH
@@ -1249,7 +1480,9 @@ mod test {
     #[test]
     fn test_proprietary_command_from_slice() {
         let b = vec![59, 154, 202, 0, 1, 2, 3, 4, 128, 4, 4, 3, 2, 1];
-        let cmd_pl = CommandPayload::from_slice(&b).unwrap();
+        let mut cmd_pl = CommandPayload::from_slice(&b).unwrap();
+        cmd_pl.decode().unwrap();
+
         assert_eq!(
             CommandPayload {
                 timestamp: UNIX_EPOCH
