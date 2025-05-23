@@ -134,8 +134,12 @@ pub async fn send_events(events: Vec<packets::Event>) -> Result<()> {
         }),
         mic: None,
     };
-    packet.encrypt(get_encryption_key(Aes128Key::null()))?;
-    packet.set_mic(get_signing_key(conf.mesh.signing_key))?;
+    packet.encrypt(get_encryption_key(conf.mesh.root_key))?;
+    packet.set_mic(if conf.mesh.signing_key != Aes128Key::null() {
+        conf.mesh.signing_key
+    } else {
+        get_signing_key(conf.mesh.root_key)
+    })?;
 
     let pl = gw::DownlinkFrame {
         downlink_id: random(),
