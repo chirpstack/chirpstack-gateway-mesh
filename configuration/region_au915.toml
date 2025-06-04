@@ -75,6 +75,8 @@
     927100000,
   ]
 
+  tx_power = [12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]
+
   [[mappings.data_rates]]
     modulation = "LORA"
     spreading_factor = 12
