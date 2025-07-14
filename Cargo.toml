@@ -21,7 +21,7 @@
   log = "0.4"
   simple_logger = "5.0"
   syslog = "7.0"
-  toml = "0.8"
+  toml = "0.9"
   handlebars = "6.3"
   anyhow = "1.0"
   humantime-serde = "1.1"
