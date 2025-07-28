@@ -26,7 +26,7 @@
   anyhow = "1.0"
   humantime-serde = "1.1"
   serde = { version = "1.0", features = ["derive"] }
-  tokio = { version = "1.45", features = [
+  tokio = { version = "1.47", features = [
     "macros",
     "rt-multi-thread",
     "time",
