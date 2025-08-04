@@ -39,6 +39,13 @@ pub fn run() {
   # above root_key, but this key will be used.
   signing_key="{{ mesh.signing_key }}"
 
+  # Relay ID.
+  #
+  # If set, this will override the Relay ID that is derived from the
+  # Gateway ID provided by the Concentratord backend (using the 4 least
+  # significant bytes). Example: "01020304".
+  relay_id="{{ mesh.relay_id }}"
+
   # Border Gateway.
   #
   # If this is set to true, then the ChirpStack Gateway Mesh will consider

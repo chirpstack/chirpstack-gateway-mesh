@@ -174,7 +174,16 @@ async fn setup_mesh_conncentratord(conf: &Configuration) -> Result<()> {
     info!("Retrieved Gateway ID: {}", resp.gateway_id);
 
     let mut relay_id: [u8; 4] = [0; 4];
-    relay_id.copy_from_slice(&hex::decode(&resp.gateway_id)?[4..]);
+    if conf.mesh.relay_id.is_empty() {
+        relay_id.copy_from_slice(&hex::decode(&resp.gateway_id)?[4..]);
+    } else {
+        info!("Using relay_id from configuration file");
+        let b = hex::decode(&conf.mesh.relay_id)?;
+        if b.len() != 4 {
+            return Err(anyhow!("relay_id must be exactly 4 bytes!"));
+        }
+        relay_id.copy_from_slice(&b);
+    }
     RELAY_ID
         .set(Mutex::new(relay_id))
         .map_err(|e| anyhow!("OnceLock error: {:?}", e))?;
