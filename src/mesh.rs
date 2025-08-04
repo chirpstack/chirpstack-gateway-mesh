@@ -3,7 +3,7 @@ use std::sync::{LazyLock, Mutex};
 use std::time::SystemTime;
 
 use anyhow::Result;
-use chirpstack_api::gw;
+use chirpstack_api::{gw, prost_types};
 use log::{info, trace, warn};
 use rand::random;
 
@@ -110,7 +110,13 @@ pub async fn send_mesh_command(pl: gw::MeshCommand) -> Result<()> {
             commands: pl
                 .commands
                 .iter()
-                .filter_map(|v| v.command.as_ref().map(|gw::mesh_command_item::Command::Proprietary(v)| packets::Command::Proprietary((v.command_type as u8, v.payload.clone()))))
+                .filter_map(|v| {
+                    v.command
+                        .as_ref()
+                        .map(|gw::mesh_command_item::Command::Proprietary(v)| {
+                            packets::Command::Proprietary((v.command_type as u8, v.payload.clone()))
+                        })
+                })
                 .collect(),
         }),
         mic: None,

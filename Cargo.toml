@@ -21,12 +21,12 @@
   log = "0.4"
   simple_logger = "5.0"
   syslog = "7.0"
-  toml = "0.8"
+  toml = "0.9"
   handlebars = "6.3"
   anyhow = "1.0"
   humantime-serde = "1.1"
   serde = { version = "1.0", features = ["derive"] }
-  tokio = { version = "1.45", features = [
+  tokio = { version = "1.47", features = [
     "macros",
     "rt-multi-thread",
     "time",
@@ -40,7 +40,6 @@
   signal-hook = "0.3"
   signal-hook-tokio = { version = "0.3", features = ["futures-v0_3"] }
   futures = "0.3"
-  prost-types = "0.13"
   zmq = "0.10"
   cmac = "0.7"
   aes = "0.8"
