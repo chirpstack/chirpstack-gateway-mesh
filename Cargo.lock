@@ -156,7 +156,7 @@ checksum = "2fd1289c04a9ea8cb22300a459a72a385d7c73d3259e2ed7dcb2af674838cfa9"
 
 [[package]]
 name = "chirpstack-gateway-mesh"
-version = "4.1.0-test.2"
+version = "4.1.0"
 dependencies = [
  "aes",
  "anyhow",
