@@ -2,6 +2,7 @@ use anyhow::Result;
 
 use crate::config;
 use chirpstack_api::gw;
+use chrono::{Timelike, Utc};
 
 pub fn frequency_to_chan(freq: u32) -> Result<u8> {
     let conf = config::get();
@@ -177,6 +178,12 @@ pub fn tx_ack_to_err(tx_ack: &gw::DownlinkTxAck) -> Result<()> {
     } else {
         Ok(())
     }
+}
+
+// Returns the milliseconds since midnight (UTC).
+pub fn ms_since_midnight() -> u32 {
+    let now = Utc::now();
+    now.num_seconds_from_midnight() * 1000 + u32::from(now.timestamp_subsec_millis())
 }
 
 pub fn format_uplink(pl: &gw::UplinkFrame) -> Result<String> {

@@ -78,6 +78,11 @@ async fn test_relay_gateway_uplink_lora() {
 
     let down_item = down.items.first().unwrap();
     let mesh_packet = packets::MeshPacket::from_slice(&down_item.phy_payload).unwrap();
+    let ts = if let packets::Payload::Uplink(pl) = &mesh_packet.payload {
+        pl.timestamp
+    } else {
+        0
+    };
 
     assert_eq!(
         {
@@ -94,6 +99,7 @@ async fn test_relay_gateway_uplink_lora() {
                         snr: 12,
                         channel: 1,
                     },
+                    timestamp: ts,
                     relay_id: [2, 2, 2, 2],
                     phy_payload: vec![1, 2, 3, 4, 5, 6, 7, 8],
                 }),

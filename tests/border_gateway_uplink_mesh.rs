@@ -32,6 +32,7 @@ async fn test_border_gateway_uplink_mesh() {
                 snr: 6,
                 channel: 2,
             },
+            timestamp: 0,
             relay_id: [1, 2, 3, 4],
             phy_payload: vec![9, 8, 7, 6],
         }),
@@ -54,6 +55,7 @@ async fn test_border_gateway_uplink_mesh() {
         }),
         rx_info: Some(gw::UplinkRxInfo {
             crc_status: gw::CrcStatus::CrcOk.into(),
+            uplink_id: 123456,
             ..Default::default()
         }),
         ..Default::default()
@@ -110,22 +112,14 @@ async fn test_border_gateway_uplink_mesh() {
 
     // Validate RxInfo (GatewayID, context, RSSI & SNR)
     let rx_info = up.rx_info.as_ref().unwrap();
-    assert_eq!(
-        &gw::UplinkRxInfo {
-            gateway_id: "0101010101010101".to_string(),
-            rssi: -60,
-            snr: 6.0,
-            context: vec![1, 2, 3, 1, 2, 3, 4, 0, 123],
-            crc_status: gw::CrcStatus::CrcOk.into(),
-            metadata: [
-                ("relay_id".to_string(), "01020304".to_string()),
-                ("hop_count".to_string(), "1".to_string()),
-            ]
-            .iter()
-            .cloned()
-            .collect(),
-            ..Default::default()
-        },
-        rx_info
-    );
+    assert_eq!("0101010101010101", rx_info.gateway_id);
+    assert_eq!(-60, rx_info.rssi);
+    assert_eq!(6.0, rx_info.snr);
+    assert_eq!(vec![1, 2, 3, 1, 2, 3, 4, 0, 123], rx_info.context);
+    assert_eq!(gw::CrcStatus::CrcOk as i32, rx_info.crc_status);
+    assert_eq!("01020304", rx_info.metadata.get("relay_id").unwrap());
+    assert_eq!("1", rx_info.metadata.get("hop_count").unwrap());
+    assert_eq!("123", rx_info.metadata.get("uplink_id").unwrap());
+    assert_eq!(123, rx_info.uplink_id);
+    assert!(rx_info.metadata.contains_key("mesh_delay_ms"));
 }

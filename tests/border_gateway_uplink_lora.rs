@@ -31,6 +31,7 @@ async fn test_border_gateway_uplink_lora() {
         rx_info: Some(gw::UplinkRxInfo {
             gateway_id: "0101010101010101".to_string(),
             crc_status: gw::CrcStatus::CrcOk.into(),
+            uplink_id: 123456,
             ..Default::default()
         }),
         ..Default::default()
@@ -65,6 +66,13 @@ async fn test_border_gateway_uplink_lora() {
         }
     };
 
-    // Validate they are equal.
-    assert_eq!(up, up_received);
+    // Validate forwarded uplink including metadata.
+    let mut up_expected = up.clone();
+    if let Some(rx_info) = &mut up_expected.rx_info {
+        rx_info
+            .metadata
+            .insert("uplink_id".to_string(), rx_info.uplink_id.to_string());
+    }
+
+    assert_eq!(up_expected, up_received);
 }

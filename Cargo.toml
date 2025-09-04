@@ -43,6 +43,7 @@
   zmq = "0.10"
   cmac = "0.7"
   aes = "0.8"
+  chrono = { version = "0.4", default-features = false, features = ["clock"] }
 
 [dev-dependencies]
   zeromq = "0.4"

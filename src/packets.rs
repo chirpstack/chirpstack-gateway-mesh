@@ -162,10 +162,11 @@ impl fmt::Display for MeshPacket {
         match &self.payload {
             Payload::Uplink(v) => write!(
                 f,
-                "[{:?} hop_count: {}, uplink_id: {}, relay_id: {}, mic: {}]",
+                "[{:?} hop_count: {}, uplink_id: {}, timestamp: {}, relay_id: {}, mic: {}]",
                 self.mhdr.payload_type,
                 self.mhdr.hop_count,
                 v.metadata.uplink_id,
+                v.timestamp,
                 hex::encode(v.relay_id),
                 self.mic.map(hex::encode).unwrap_or_default(),
             ),
@@ -269,30 +270,34 @@ pub enum Payload {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct UplinkPayload {
     pub metadata: UplinkMetadata,
+    pub timestamp: u32,
     pub relay_id: [u8; 4],
     pub phy_payload: Vec<u8>,
 }
 
 impl UplinkPayload {
     pub fn from_slice(b: &[u8]) -> Result<UplinkPayload> {
-        if b.len() < 9 {
-            return Err(anyhow!("At least 9 bytes are expected"));
+        if b.len() < 13 {
+            return Err(anyhow!("At least 13 bytes are expected"));
         }
 
         let mut md = [0; 5];
-        let mut gw_id = [0; 4];
         md.copy_from_slice(&b[0..5]);
-        gw_id.copy_from_slice(&b[5..9]);
+        let timestamp = u32::from_be_bytes([b[5], b[6], b[7], b[8]]);
+        let mut gw_id = [0; 4];
+        gw_id.copy_from_slice(&b[9..13]);
 
         Ok(UplinkPayload {
             metadata: UplinkMetadata::from_bytes(md),
+            timestamp,
             relay_id: gw_id,
-            phy_payload: b[9..].to_vec(),
+            phy_payload: b[13..].to_vec(),
         })
     }
 
     pub fn to_vec(&self) -> Result<Vec<u8>> {
         let mut b = self.metadata.to_bytes()?.to_vec();
+        b.extend_from_slice(&self.timestamp.to_be_bytes());
         b.extend_from_slice(&self.relay_id);
         b.extend_from_slice(&self.phy_payload);
         Ok(b)
@@ -1208,7 +1213,10 @@ mod test {
 
     #[test]
     fn test_uplink_payload_from_vec() {
-        let b = vec![0x40, 0x03, 0x78, 0x34, 0x40, 0x01, 0x02, 0x03, 0x04, 0x05];
+        let b = vec![
+            0x40, 0x03, 0x78, 0x34, 0x40, 0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03,
+            0x04, 0x05,
+        ];
         let up_pl = UplinkPayload::from_slice(&b).unwrap();
         assert_eq!(
             UplinkPayload {
@@ -1219,6 +1227,7 @@ mod test {
                     snr: -12,
                     channel: 64,
                 },
+                timestamp: 0,
                 relay_id: [0x01, 0x02, 0x03, 0x04],
                 phy_payload: vec![0x05],
             },
@@ -1236,12 +1245,16 @@ mod test {
                 snr: -12,
                 channel: 64,
             },
+            timestamp: 0,
             relay_id: [0x01, 0x02, 0x03, 0x04],
             phy_payload: vec![0x05],
         };
         let b = up_pl.to_vec().unwrap();
         assert_eq!(
-            vec![0x40, 0x03, 0x78, 0x34, 0x40, 0x01, 0x02, 0x03, 0x04, 0x05],
+            vec![
+                0x40, 0x03, 0x78, 0x34, 0x40, 0x00, 0x00, 0x00, 0x00, 0x01, 0x02,
+                0x03, 0x04, 0x05,
+            ],
             b
         );
     }
@@ -1517,8 +1530,8 @@ mod test {
             Test {
                 name: "uplink".into(),
                 bytes: vec![
-                    0xe2, 0x40, 0x03, 0x78, 0x34, 0x40, 0x01, 0x02, 0x03, 0x04, 0x05, 0x01, 0x02,
-                    0x03, 0x04,
+                    0xe2, 0x40, 0x03, 0x78, 0x34, 0x40, 0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03,
+                    0x04, 0x05, 0x01, 0x02, 0x03, 0x04,
                 ],
                 expected_mesh_packet: MeshPacket {
                     mhdr: MHDR {
@@ -1533,6 +1546,7 @@ mod test {
                             snr: -12,
                             channel: 64,
                         },
+                        timestamp: 0,
                         relay_id: [0x01, 0x02, 0x03, 0x04],
                         phy_payload: vec![0x05],
                     }),
@@ -1585,8 +1599,8 @@ mod test {
             Test {
                 name: "uplink".into(),
                 expected_bytes: vec![
-                    0xe2, 0x40, 0x03, 0x78, 0x34, 0x40, 0x01, 0x02, 0x03, 0x04, 0x05, 0x01, 0x02,
-                    0x03, 0x04,
+                    0xe2, 0x40, 0x03, 0x78, 0x34, 0x40, 0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03,
+                    0x04, 0x05, 0x01, 0x02, 0x03, 0x04,
                 ],
                 mesh_packet: MeshPacket {
                     mhdr: MHDR {
@@ -1601,6 +1615,7 @@ mod test {
                             snr: -12,
                             channel: 64,
                         },
+                        timestamp: 0,
                         relay_id: [0x01, 0x02, 0x03, 0x04],
                         phy_payload: vec![0x05],
                     }),
@@ -1653,8 +1668,8 @@ mod test {
             Test {
                 name: "mesh packet".into(),
                 bytes: vec![
-                    0xe2, 0x40, 0x03, 0x78, 0x34, 0x40, 0x01, 0x02, 0x03, 0x04, 0x05, 0x01, 0x02,
-                    0x03, 0x04,
+                    0xe2, 0x40, 0x03, 0x78, 0x34, 0x40, 0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03,
+                    0x04, 0x05, 0x01, 0x02, 0x03, 0x04,
                 ],
                 expected_packet: Packet::Mesh(MeshPacket {
                     mhdr: MHDR {
@@ -1669,6 +1684,7 @@ mod test {
                             snr: -12,
                             channel: 64,
                         },
+                        timestamp: 0,
                         relay_id: [0x01, 0x02, 0x03, 0x04],
                         phy_payload: vec![0x05],
                     }),
@@ -1701,8 +1717,8 @@ mod test {
             Test {
                 name: "mesh packet".into(),
                 expected_bytes: vec![
-                    0xe2, 0x40, 0x03, 0x78, 0x34, 0x40, 0x01, 0x02, 0x03, 0x04, 0x05, 0x01, 0x02,
-                    0x03, 0x04,
+                    0xe2, 0x40, 0x03, 0x78, 0x34, 0x40, 0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03,
+                    0x04, 0x05, 0x01, 0x02, 0x03, 0x04,
                 ],
                 packet: Packet::Mesh(MeshPacket {
                     mhdr: MHDR {
@@ -1717,6 +1733,7 @@ mod test {
                             snr: -12,
                             channel: 64,
                         },
+                        timestamp: 0,
                         relay_id: [0x01, 0x02, 0x03, 0x04],
                         phy_payload: vec![0x05],
                     }),

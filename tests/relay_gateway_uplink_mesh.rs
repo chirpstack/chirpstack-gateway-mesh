@@ -33,6 +33,7 @@ async fn test_relay_gateway_uplink_mesh() {
                     snr: 0,
                     channel: 0,
                 },
+                timestamp: 0,
                 relay_id: [1, 2, 3, 4],
                 phy_payload: vec![4, 3, 2, 1],
             }),
@@ -102,9 +103,16 @@ async fn test_relay_gateway_uplink_mesh() {
     let down_item = down.items.first().unwrap();
     let mesh_packet = packets::Packet::from_slice(&down_item.phy_payload).unwrap();
 
-    // The hop_count must be incremented.
+    // The hop_count must be incremented and timestamp preserved.
     if let packets::Packet::Mesh(v) = &mut packet {
         v.mhdr.hop_count += 1;
+        if let packets::Payload::Uplink(pl) = &mut v.payload {
+            if let packets::Packet::Mesh(ref mp) = mesh_packet {
+                if let packets::Payload::Uplink(actual) = &mp.payload {
+                    pl.timestamp = actual.timestamp;
+                }
+            }
+        }
         v.set_mic(get_signing_key(Aes128Key::null())).unwrap();
     }
 
