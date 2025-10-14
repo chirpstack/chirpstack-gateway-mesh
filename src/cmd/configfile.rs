@@ -125,6 +125,39 @@ pub fn run() {
     # Command REP socket bind.
     command_bind="{{ mesh.proxy_api.command_bind }}"
 
+  # Filters.
+  [mesh.filters]
+
+    # DevAddr prefix filters.
+    #
+    # Example configuration:
+    # dev_addr_prefixes=["0000ff00/24"]
+    #
+    # The above filter means that the 24MSB of 0000ff00 will be used to
+    # filter DevAddrs. Uplinks with DevAddrs that do not match any of the
+    # configured filters will not be forwarded. Leaving this option empty
+    # disables filtering on DevAddr.
+    dev_addr_prefixes=[
+      {{#each mesh.filters.dev_addr_prefixes}}
+      "{{this}}",
+      {{/each}}
+    ]
+
+    # JoinEUI prefix filters.
+    #
+    # Example configuration:
+    # join_eui_prefixes=["0000ff0000000000/24"]
+    #
+    # The above filter means that the 24MSB of 0000ff0000000000 will be used
+    # to filter JoinEUIs. Uplinks with JoinEUIs that do not match any of the
+    # configured filters will not be forwarded. Leaving this option empty
+    # disables filtering on JoinEUI.
+    join_eui_prefixes=[
+      {{#each mesh.filters.join_eui_prefixes}}
+      "{{this}}",
+      {{/each}}
+    ]
+
 
 # Backend configuration.
 [backend]
