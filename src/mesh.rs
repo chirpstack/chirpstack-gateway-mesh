@@ -5,18 +5,17 @@ use std::time::SystemTime;
 use anyhow::Result;
 use chirpstack_api::{gw, prost_types};
 use log::{info, trace, warn};
-use rand::random;
 
 use crate::{
-    aes128::{get_encryption_key, get_signing_key, Aes128Key},
+    aes128::{Aes128Key, get_encryption_key, get_signing_key},
     backend,
     cache::{Cache, PayloadCache},
     commands,
     config::{self, Configuration},
     events, helpers,
     packets::{
-        self, DownlinkMetadata, Event, MeshPacket, Payload, PayloadType, UplinkMetadata,
-        UplinkPayload, MHDR,
+        self, DownlinkMetadata, Event, MHDR, MeshPacket, Payload, PayloadType, UplinkMetadata,
+        UplinkPayload,
     },
     proxy,
 };
@@ -129,7 +128,7 @@ pub async fn send_mesh_command(pl: gw::MeshCommand) -> Result<()> {
     })?;
 
     let pl = gw::DownlinkFrame {
-        downlink_id: random(),
+        downlink_id: getrandom::u32()?,
         items: vec![gw::DownlinkFrameItem {
             phy_payload: packet.to_vec()?,
             tx_info: Some(gw::DownlinkTxInfo {
@@ -315,7 +314,7 @@ async fn relay_mesh_packet(pl: &gw::UplinkFrame, mut packet: MeshPacket) -> Resu
                 // End Device.
 
                 let pl = gw::DownlinkFrame {
-                    downlink_id: random(),
+                    downlink_id: getrandom::u32()?,
                     items: vec![gw::DownlinkFrameItem {
                         phy_payload: pl.phy_payload.clone(),
                         tx_info: Some(gw::DownlinkTxInfo {
@@ -405,7 +404,7 @@ async fn relay_mesh_packet(pl: &gw::UplinkFrame, mut packet: MeshPacket) -> Resu
     }
 
     let pl = gw::DownlinkFrame {
-        downlink_id: random(),
+        downlink_id: getrandom::u32()?,
         items: vec![gw::DownlinkFrameItem {
             phy_payload: packet.to_vec()?,
             tx_info: Some(gw::DownlinkTxInfo {
@@ -475,7 +474,7 @@ async fn relay_uplink_lora_packet(pl: &gw::UplinkFrame) -> Result<()> {
     })?;
 
     let pl = gw::DownlinkFrame {
-        downlink_id: random(),
+        downlink_id: getrandom::u32()?,
         items: vec![gw::DownlinkFrameItem {
             phy_payload: packet.to_vec()?,
             tx_info: Some(gw::DownlinkTxInfo {

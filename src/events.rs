@@ -4,12 +4,11 @@ use std::time::SystemTime;
 use anyhow::Result;
 use chirpstack_api::gw;
 use log::{error, info};
-use rand::random;
 use tokio::process::Command;
 use tokio::sync::OnceCell;
 use tokio::time::sleep;
 
-use crate::aes128::{get_encryption_key, get_signing_key, Aes128Key};
+use crate::aes128::{Aes128Key, get_encryption_key, get_signing_key};
 use crate::backend;
 use crate::config::{self, Configuration};
 use crate::helpers;
@@ -142,7 +141,7 @@ pub async fn send_events(events: Vec<packets::Event>) -> Result<()> {
     })?;
 
     let pl = gw::DownlinkFrame {
-        downlink_id: random(),
+        downlink_id: getrandom::u32()?,
         items: vec![gw::DownlinkFrameItem {
             phy_payload: packet.to_vec()?,
             tx_info: Some(gw::DownlinkTxInfo {
