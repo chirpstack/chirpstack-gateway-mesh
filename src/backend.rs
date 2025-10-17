@@ -303,7 +303,8 @@ async fn handle_event_msg(
                     debug!(
                         "Discarding uplink because of dev_addr and join_eui filters, uplink_id: {}",
                         rx_info.uplink_id
-                    )
+                    );
+                    return Ok(());
                 }
 
                 info!("Frame received - {}", helpers::format_uplink(v)?);

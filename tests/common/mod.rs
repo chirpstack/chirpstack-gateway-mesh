@@ -1,5 +1,5 @@
-use std::sync::OnceLock;
 use std::time::Duration;
+use std::{str::FromStr, sync::OnceLock};
 
 use tokio::fs::remove_file;
 use tokio::sync::Mutex;
@@ -44,6 +44,12 @@ pub fn get_config(border_gateway: bool) -> Configuration {
                 command_bind: "ipc:///tmp/gateway_mesh_command".into(),
             },
             max_hop_count: 3,
+            filters: config::Filters {
+                dev_addr_prefixes: vec![
+                    lrwn_filters::DevAddrPrefix::from_str("00000000/8").unwrap(),
+                ],
+                ..Default::default()
+            },
             ..Default::default()
         },
         backend: config::Backend {
