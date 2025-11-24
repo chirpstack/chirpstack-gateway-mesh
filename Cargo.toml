@@ -52,7 +52,7 @@
 
 [dev-dependencies]
   zeromq = "0.4"
-  bytes = "1.10"
+  bytes = "1.11"
 
 [profile.release]
   strip = true
