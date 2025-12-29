@@ -43,7 +43,7 @@
   ] }
   hex = "0.4"
   getrandom = "0.3"
-  signal-hook = "0.3"
+  signal-hook = "0.4"
   signal-hook-tokio = { version = "0.3", features = ["futures-v0_3"] }
   futures = "0.3"
   zmq = "0.10"
