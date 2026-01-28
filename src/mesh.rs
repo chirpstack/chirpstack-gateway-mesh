@@ -4,7 +4,7 @@ use std::time::SystemTime;
 
 use anyhow::Result;
 use chirpstack_api::{gw, prost_types};
-use log::{info, trace, warn};
+use log::{debug, info, trace, warn};
 
 use crate::{
     aes128::{Aes128Key, get_encryption_key, get_signing_key},
@@ -39,13 +39,23 @@ pub async fn handle_uplink(border_gateway: bool, pl: &gw::UplinkFrame) -> Result
 // Handle Proprietary LoRaWAN payload (mesh encapsulated).
 pub async fn handle_mesh(border_gateway: bool, pl: &gw::UplinkFrame) -> Result<()> {
     let conf = config::get();
-    let mut packet = MeshPacket::from_slice(&pl.phy_payload)?;
+    let mut packet = match MeshPacket::from_slice(&pl.phy_payload) {
+        Ok(v) => v,
+        Err(e) => {
+            debug!(
+                "Discarding proprietary uplink, not a valid mesh packet, error: {}, uplink_id: {}",
+                e,
+                pl.rx_info.as_ref().map(|v| v.uplink_id).unwrap_or_default()
+            );
+            return Ok(());
+        }
+    };
     if !packet.validate_mic(if conf.mesh.signing_key != Aes128Key::null() {
         conf.mesh.signing_key
     } else {
         get_signing_key(conf.mesh.root_key)
     })? {
-        warn!("Dropping packet, invalid MIC, mesh_packet: {}", packet);
+        debug!("Dropping packet, invalid MIC, mesh_packet: {}", packet);
         return Ok(());
     }
 
@@ -61,6 +71,12 @@ pub async fn handle_mesh(border_gateway: bool, pl: &gw::UplinkFrame) -> Result<(
 
     // Decrypt the packet (in case it contains an encrypted payload).
     packet.decrypt(get_encryption_key(conf.mesh.root_key))?;
+
+    debug!(
+        "Mesh frame received - {}, mesh_packet: {}",
+        helpers::format_uplink(pl)?,
+        packet
+    );
 
     match border_gateway {
         // Proxy relayed uplink

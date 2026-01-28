@@ -2,11 +2,8 @@ use std::fmt;
 use std::io::{Cursor, Read};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use aes::{
-    cipher::BlockEncrypt,
-    Aes128, Block,
-};
-use anyhow::Result;
+use aes::{Aes128, Block, cipher::BlockEncrypt};
+use anyhow::{Context, Result};
 use cmac::{Cmac, Mac};
 use log::warn;
 
@@ -276,7 +273,10 @@ pub struct UplinkPayload {
 impl UplinkPayload {
     pub fn from_slice(b: &[u8]) -> Result<UplinkPayload> {
         if b.len() < 9 {
-            return Err(anyhow!("At least 9 bytes are expected"));
+            return Err(anyhow!(
+                "This is not a mesh uplink packet. At least 9 bytes of payload are expected, got: {}. ",
+                b.len()
+            ));
         }
 
         let mut md = [0; 5];
@@ -376,7 +376,7 @@ pub struct DownlinkPayload {
 impl DownlinkPayload {
     pub fn from_slice(b: &[u8]) -> Result<Self> {
         if b.len() < 10 {
-            return Err(anyhow!("At least 10 bytes are expected"));
+            return Err(anyhow!("At least 10 bytes are expected, got: {}", b.len()));
         }
 
         let mut md = [0; 6];
@@ -463,18 +463,24 @@ pub struct EventPayload {
 
 impl EventPayload {
     pub fn from_slice(b: &[u8]) -> Result<EventPayload> {
+        if b.len() < 8 {
+            return Err(anyhow!(
+                "This is not a mesh event packet. At least 8 bytes of payload are expected, got: {}",
+                b.len()
+            ));
+        }
         let b_len = b.len() as u64;
         let mut cur = Cursor::new(b);
         let mut ts_b: [u8; 4] = [0; 4];
 
-        cur.read_exact(&mut ts_b)?;
+        cur.read_exact(&mut ts_b).context("Read timestamp")?;
         let timestamp = u32::from_be_bytes(ts_b);
         let timestamp = UNIX_EPOCH
             .checked_add(Duration::from_secs(timestamp.into()))
             .ok_or_else(|| anyhow!("Invalid timestamp"))?;
 
         let mut relay_id: [u8; 4] = [0; 4];
-        cur.read_exact(&mut relay_id)?;
+        cur.read_exact(&mut relay_id).context("Read relay_id")?;
 
         let mut events = Vec::new();
 
@@ -591,10 +597,10 @@ pub enum Event {
 impl Event {
     pub fn decode(cur: &mut Cursor<&[u8]>) -> Result<Self> {
         let mut tag_length: [u8; 2] = [0; 2];
-        cur.read_exact(&mut tag_length)?;
+        cur.read_exact(&mut tag_length).context("Read tag_length")?;
 
         let mut value = vec![0; tag_length[1] as usize];
-        cur.read_exact(&mut value)?;
+        cur.read_exact(&mut value).context("Read value")?;
 
         Ok(match tag_length[0] {
             0x00 => Event::Heartbeat(HeartbeatPayload::from_slice(&value)?),
@@ -714,18 +720,24 @@ pub struct CommandPayload {
 
 impl CommandPayload {
     pub fn from_slice(b: &[u8]) -> Result<CommandPayload> {
+        if b.len() < 8 {
+            return Err(anyhow!(
+                "This is not a mesh command packet : at least 8 bytes of payload are expected, got: {}",
+                b.len()
+            ));
+        }
         let b_len = b.len() as u64;
         let mut cur = Cursor::new(b);
         let mut ts_b: [u8; 4] = [0; 4];
 
-        cur.read_exact(&mut ts_b)?;
+        cur.read_exact(&mut ts_b).context("Read timestamp")?;
         let timestamp = u32::from_be_bytes(ts_b);
         let timestamp = UNIX_EPOCH
             .checked_add(Duration::from_secs(timestamp.into()))
             .ok_or_else(|| anyhow!("Invalid timestamp"))?;
 
         let mut relay_id: [u8; 4] = [0; 4];
-        cur.read_exact(&mut relay_id)?;
+        cur.read_exact(&mut relay_id).context("Read relay_id")?;
 
         let mut commands = Vec::new();
 
@@ -841,10 +853,10 @@ pub enum Command {
 impl Command {
     pub fn decode(cur: &mut Cursor<&[u8]>) -> Result<Self> {
         let mut tag_length: [u8; 2] = [0; 2];
-        cur.read_exact(&mut tag_length)?;
+        cur.read_exact(&mut tag_length).context("Read tag_length")?;
 
         let mut value = vec![0; tag_length[1] as usize];
-        cur.read_exact(&mut value)?;
+        cur.read_exact(&mut value).context("Read value")?;
 
         Ok(Command::Proprietary((tag_length[0], value)))
     }
@@ -1406,7 +1418,9 @@ mod test {
         };
         let b = dn_pl.to_vec().unwrap();
         assert_eq!(
-            vec![0x40, 0x03, 0x84, 0x76, 0x28, 0xff, 0x01, 0x02, 0x03, 0x04, 0x05,],
+            vec![
+                0x40, 0x03, 0x84, 0x76, 0x28, 0xff, 0x01, 0x02, 0x03, 0x04, 0x05,
+            ],
             b
         );
     }
@@ -1468,7 +1482,9 @@ mod test {
         };
         let b = event_pl.to_vec().unwrap();
         assert_eq!(
-            vec![59, 154, 202, 0, 1, 2, 3, 4, 0, 12, 5, 6, 7, 8, 120, 52, 9, 10, 11, 12, 120, 52],
+            vec![
+                59, 154, 202, 0, 1, 2, 3, 4, 0, 12, 5, 6, 7, 8, 120, 52, 9, 10, 11, 12, 120, 52
+            ],
             b
         );
     }
@@ -1734,5 +1750,30 @@ mod test {
             let b = tst.packet.to_vec().unwrap();
             assert_eq!(tst.expected_bytes, b);
         }
+    }
+
+    #[test]
+    fn test_mesh_packet_from_slice_too_short() {
+        // PayloadType::Event, but only 1 byte of payload (MHDR(1) + EventPayload(1) + MIC(4) = 6 bytes)
+        // EventPayload needs at least 8 bytes (4 for timestamp, 4 for relay_id)
+        let b = vec![
+            MHDR {
+                payload_type: PayloadType::Event,
+                hop_count: 1,
+            }
+            .to_byte()
+            .unwrap(),
+            0x00, // 1 byte of payload (not enough for EventPayload)
+            0x00,
+            0x00,
+            0x00,
+            0x00, // MIC
+        ];
+        let res = MeshPacket::from_slice(&b);
+        assert!(res.is_err());
+        assert_eq!(
+            res.unwrap_err().to_string(),
+            "This is not a mesh event packet. At least 8 bytes of payload are expected, got: 1"
+        );
     }
 }

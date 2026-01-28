@@ -21,7 +21,7 @@ type CommandChannel = mpsc::UnboundedSender<Command>;
 
 pub async fn setup(conf: &Configuration) -> Result<()> {
     setup_concentratord(conf).await?;
-    setup_mesh_conncentratord(conf).await?;
+    setup_mesh_concentratord(conf).await?;
     Ok(())
 }
 
@@ -128,7 +128,7 @@ async fn setup_concentratord(conf: &Configuration) -> Result<()> {
     Ok(())
 }
 
-async fn setup_mesh_conncentratord(conf: &Configuration) -> Result<()> {
+async fn setup_mesh_concentratord(conf: &Configuration) -> Result<()> {
     info!(
         "Setting up Mesh Concentratord backend, event_url: {}, command_url: {}",
         conf.backend.mesh_concentratord.event_url, conf.backend.mesh_concentratord.command_url
@@ -339,7 +339,6 @@ async fn handle_mesh_event_msg(border_gateway: bool, event: gw::Event) -> Result
 
         // The mesh event msg must always be a proprietary payload.
         if v.phy_payload.first().cloned().unwrap_or_default() & 0xe0 == 0xe0 {
-            info!("Mesh frame received - {}", helpers::format_uplink(v)?);
             mesh::handle_mesh(border_gateway, v).await?;
         }
     }
