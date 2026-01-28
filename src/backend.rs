@@ -112,6 +112,7 @@ async fn setup_concentratord(conf: &Configuration) -> Result<()> {
         let filters = lrwn_filters::Filters {
             dev_addr_prefixes: conf.mesh.filters.dev_addr_prefixes.clone(),
             join_eui_prefixes: conf.mesh.filters.join_eui_prefixes.clone(),
+            lorawan_only: conf.mesh.filters.lorawan_only,
         };
 
         async move {

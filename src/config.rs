@@ -139,6 +139,7 @@ impl Default for ProxyApi {
 pub struct Filters {
     pub dev_addr_prefixes: Vec<lrwn_filters::DevAddrPrefix>,
     pub join_eui_prefixes: Vec<lrwn_filters::EuiPrefix>,
+    pub lorawan_only: bool,
 }
 
 #[derive(Serialize, Deserialize, Default, PartialEq, Eq)]

@@ -158,6 +158,9 @@ pub fn run() {
       {{/each}}
     ]
 
+    # LoRaWAN only.
+    lorawan_only={{mesh.filters.lorawan_only}}
+
 
 # Backend configuration.
 [backend]
