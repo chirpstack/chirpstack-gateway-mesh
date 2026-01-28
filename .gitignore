@@ -1,6 +1,7 @@
 # Hidden files
 .*
 !.github
+!.gitignore
 
 # Config files
 /chirpstack-gateway-relay.toml

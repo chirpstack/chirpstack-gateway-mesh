@@ -12,7 +12,7 @@ pkgs.mkShell {
     pkgs.cargo-deb
   ];
   shellHook = ''
-    export PATH=$PATH:~/.cargo/bin
+    export PATH=$PWD/.cargo/bin:$PATH
   '';
   DOCKER_BUILDKIT = "1";
   NIX_STORE = "/nix/store";
