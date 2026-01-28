@@ -5,7 +5,7 @@ use chirpstack_api::gw;
 use chirpstack_api::{prost::Message, prost_types};
 use zeromq::{SocketRecv, SocketSend};
 
-use chirpstack_gateway_mesh::aes128::{get_signing_key, Aes128Key};
+use chirpstack_gateway_mesh::aes128::{Aes128Key, get_signing_key};
 use chirpstack_gateway_mesh::{mesh, packets};
 
 mod common;

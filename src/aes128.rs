@@ -2,13 +2,13 @@ use std::fmt;
 use std::str::FromStr;
 
 use aes::{
-    cipher::{BlockEncrypt, KeyInit},
     Aes128, Block,
+    cipher::{BlockEncrypt, KeyInit},
 };
 use anyhow::{Error, Result};
 use serde::{
-    de::{self, Visitor},
     Deserialize, Deserializer, Serialize, Serializer,
+    de::{self, Visitor},
 };
 
 #[derive(Copy, Clone, PartialEq, Eq, Default)]

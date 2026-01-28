@@ -1,5 +1,5 @@
 use crate::config;
-use handlebars::{no_escape, Handlebars};
+use handlebars::{Handlebars, no_escape};
 
 pub fn run() {
     let template = r#"# Logging settings.

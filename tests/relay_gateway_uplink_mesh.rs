@@ -4,10 +4,10 @@ extern crate anyhow;
 use chirpstack_api::gw;
 use chirpstack_api::prost::Message;
 use chirpstack_gateway_mesh::packets;
-use tokio::time::{timeout, Duration};
+use tokio::time::{Duration, timeout};
 use zeromq::{SocketRecv, SocketSend};
 
-use chirpstack_gateway_mesh::aes128::{get_signing_key, Aes128Key};
+use chirpstack_gateway_mesh::aes128::{Aes128Key, get_signing_key};
 
 mod common;
 

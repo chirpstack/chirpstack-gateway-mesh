@@ -4,7 +4,7 @@ use std::thread;
 use anyhow::Result;
 use chirpstack_api::prost::Message;
 use log::{debug, error, info, trace};
-use tokio::sync::{mpsc, oneshot, Mutex};
+use tokio::sync::{Mutex, mpsc, oneshot};
 
 use crate::config::Configuration;
 use crate::{helpers, mesh, proxy};
@@ -294,7 +294,10 @@ async fn handle_event_msg(
 
                 // Ignore direct uplinks.
                 if border_gateway_ignore_direct_uplinks {
-                    debug!("Discarding direct uplink because of border_gateway_ignore_direct_uplinks setting, uplink_id: {}", rx_info.uplink_id);
+                    debug!(
+                        "Discarding direct uplink because of border_gateway_ignore_direct_uplinks setting, uplink_id: {}",
+                        rx_info.uplink_id
+                    );
                     return Ok(());
                 }
 
