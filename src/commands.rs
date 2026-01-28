@@ -36,13 +36,12 @@ pub async fn setup(conf: &Configuration) -> Result<()> {
 pub async fn execute_commands(pl: &packets::CommandPayload) -> Result<Vec<packets::Event>> {
     // Validate that the command timestamp did increment, compared to previous
     // command payload.
-    if let Some(ts) = get_last_timestamp().await {
-        if ts >= pl.timestamp {
+    if let Some(ts) = get_last_timestamp().await
+        && ts >= pl.timestamp {
             return Err(anyhow!(
                 "Command timestamp did not increment compared to previous command payload"
             ));
         }
-    }
 
     // Store the command timestamp.
     set_last_timestamp(pl.timestamp).await;
