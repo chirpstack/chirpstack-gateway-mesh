@@ -3,7 +3,7 @@ use std::io::{Cursor, Read};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use aes::{
-    cipher::{generic_array::GenericArray, BlockEncrypt},
+    cipher::BlockEncrypt,
     Aes128, Block,
 };
 use anyhow::Result;
@@ -143,7 +143,7 @@ impl MeshPacket {
     }
 
     fn calculate_mic(&self, key: Aes128Key) -> Result<[u8; 4]> {
-        let mut mac = Cmac::<Aes128>::new_from_slice(&key.to_bytes()).unwrap();
+        let mut mac = <Cmac<Aes128> as Mac>::new_from_slice(&key.to_bytes()).unwrap();
         mac.update(&self.mic_bytes()?);
         let cmac_f = mac.finalize().into_bytes();
         // sanity Check
@@ -933,22 +933,21 @@ pub fn encrypt_events_commands(
     let timestamp = timestamp.duration_since(UNIX_EPOCH)?.as_secs() as u32;
 
     let key_bytes = key.to_bytes();
-    let key = GenericArray::from_slice(&key_bytes);
-    let cipher = Aes128::new(key);
+    let cipher = Aes128::new_from_slice(&key_bytes).expect("Invalid key length");
 
-    let mut a = vec![0; 16];
+    let mut a = [0u8; 16];
     a[0] = 0x01;
     if is_command {
         a[5] = 0x01;
     }
-    a[6..10].clone_from_slice(relay_id);
-    a[10..14].clone_from_slice(&timestamp.to_be_bytes());
+    a[6..10].copy_from_slice(relay_id);
+    a[10..14].copy_from_slice(&timestamp.to_be_bytes());
 
     // Encrypt blocks
     for i in 0..(b.len() / 16) {
         a[15] = (i + 1) as u8;
 
-        let mut block = Block::clone_from_slice(&a);
+        let mut block = Block::from(a);
         cipher.encrypt_block(&mut block);
 
         for j in 0..16 {

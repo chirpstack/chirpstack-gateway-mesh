@@ -2,7 +2,7 @@ use std::fmt;
 use std::str::FromStr;
 
 use aes::{
-    cipher::{generic_array::GenericArray, BlockEncrypt, KeyInit},
+    cipher::{BlockEncrypt, KeyInit},
     Aes128, Block,
 };
 use anyhow::{Error, Result};
@@ -113,12 +113,10 @@ pub fn get_encryption_key(key: Aes128Key) -> Aes128Key {
 
 fn get_key(key: Aes128Key, b: [u8; 16]) -> Aes128Key {
     let key_bytes = key.to_bytes();
-    let key = GenericArray::from_slice(&key_bytes);
-    let cipher = Aes128::new(key);
+    let cipher = Aes128::new_from_slice(&key_bytes).expect("Invalid key length");
 
-    let mut b = b;
-    let block = Block::from_mut_slice(&mut b);
-    cipher.encrypt_block(block);
+    let mut block = Block::from(b);
+    cipher.encrypt_block(&mut block);
 
-    Aes128Key(b)
+    Aes128Key(block.into())
 }
