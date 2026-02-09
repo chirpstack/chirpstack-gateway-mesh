@@ -42,7 +42,7 @@
     "io-util",
   ] }
   hex = "0.4"
-  getrandom = { version = "0.3", features = ["std"] }
+  getrandom = { version = "0.4", features = ["std"] }
   signal-hook = "0.4"
   signal-hook-tokio = { version = "0.4", features = ["futures-v0_3"] }
   futures = "0.3"
