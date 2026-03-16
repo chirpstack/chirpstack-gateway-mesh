@@ -10,20 +10,20 @@
   publish = false
 
 [dependencies]
-  clap = { version = "4.5", default-features = false, features = [
+  clap = { version = "4.6", default-features = false, features = [
     "std",
     "help",
     "usage",
     "derive",
   ] }
-  chirpstack_api = { version = "4.15", default-features = false }
+  chirpstack_api = { version = "4.16", default-features = false }
   lrwn_filters = { version = "4.16", features = ["serde"] }
   log = "0.4"
-  simple_logger = { version = "5.1", default-features = false, features = [
+  simple_logger = { version = "5.2", default-features = false, features = [
     "timestamps",
   ] }
   syslog = "7.0"
-  toml = { version = "0.9", default-features = false, features = [
+  toml = { version = "1.0", default-features = false, features = [
     "std",
     "parse",
     "serde",
@@ -32,7 +32,7 @@
   anyhow = "1.0"
   humantime-serde = "1.1"
   serde = { version = "1.0", features = ["derive"] }
-  tokio = { version = "1.49", features = [
+  tokio = { version = "1.40", features = [
     "macros",
     "rt-multi-thread",
     "time",
@@ -42,7 +42,7 @@
     "io-util",
   ] }
   hex = "0.4"
-  getrandom = { version = "0.3", features = ["std"] }
+  getrandom = { version = "0.4", features = ["std"] }
   signal-hook = "0.4"
   signal-hook-tokio = { version = "0.4", features = ["futures-v0_3"] }
   futures = "0.3"
@@ -51,7 +51,7 @@
   aes = "0.8"
 
 [dev-dependencies]
-  zeromq = "0.4"
+  zeromq = "0.5"
   bytes = "1.11"
 
 [profile.release]
