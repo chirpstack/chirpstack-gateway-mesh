@@ -3,7 +3,7 @@ use std::thread;
 
 use anyhow::Result;
 use chirpstack_api::prost::Message;
-use log::{debug, error, info, trace};
+use log::{debug, error, info, trace, warn};
 use tokio::sync::{Mutex, mpsc, oneshot};
 
 use crate::config::Configuration;
@@ -47,6 +47,11 @@ async fn setup_concentratord(conf: &Configuration) -> Result<()> {
 
             while let Some(cmd) = cmd_rx.blocking_recv() {
                 let resp = send_zmq_command(&mut sock, &cmd.0);
+                if resp.is_err() {
+                    // Re-create the ZMQ socket if we run into socket issues.
+                    warn!("Re-creating ZMQ REQ socket");
+                    sock = zmq_ctx.socket(zmq::REQ).unwrap();
+                }
                 cmd.1.send(resp).unwrap();
             }
 
@@ -99,6 +104,12 @@ async fn setup_concentratord(conf: &Configuration) -> Result<()> {
                     Ok(v) => event_tx.send(v).unwrap(),
                     Err(e) => {
                         error!("Error receiving ZMQ event, error: {}", e);
+
+                        // Re-create the ZMQ socket if we run into socket issues.
+                        warn!("Re-creating ZMQ SUB socket");
+                        sock = zmq_ctx.socket(zmq::SUB).unwrap();
+                        sock.connect(&event_url).unwrap();
+                        sock.set_subscribe("".as_bytes()).unwrap();
                     }
                 }
             }
@@ -151,6 +162,11 @@ async fn setup_mesh_concentratord(conf: &Configuration) -> Result<()> {
 
             while let Some(cmd) = cmd_rx.blocking_recv() {
                 let resp = send_zmq_command(&mut sock, &cmd.0);
+                if resp.is_err() {
+                    // Re-create the ZMQ socket if we run into socket issues.
+                    warn!("Re-create ZMQ REQ socket");
+                    sock = zmq_ctx.socket(zmq::REQ).unwrap();
+                }
                 cmd.1.send(resp).unwrap();
             }
 
@@ -214,6 +230,12 @@ async fn setup_mesh_concentratord(conf: &Configuration) -> Result<()> {
                     Ok(v) => event_tx.send(v).unwrap(),
                     Err(e) => {
                         error!("Error receiving ZMQ event, error: {}", e);
+
+                        // Re-create the ZMQ socket if we run into socket issues.
+                        warn!("Re-create ZMQ SUB socket");
+                        sock = zmq_ctx.socket(zmq::SUB).unwrap();
+                        sock.connect(&event_url).unwrap();
+                        sock.set_subscribe("".as_bytes()).unwrap();
                     }
                 }
             }
