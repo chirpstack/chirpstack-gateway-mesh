@@ -318,7 +318,10 @@ async fn relay_mesh_packet(pl: &gw::UplinkFrame, mut packet: MeshPacket) -> Resu
     match &mut packet.payload {
         packets::Payload::Uplink(pl) => {
             if pl.relay_id == relay_id {
-                trace!("Dropping packet as this relay was the sender");
+                trace!(
+                    "Dropping packet as this relay was the sender, uplink_id: {}",
+                    rx_info.uplink_id
+                );
 
                 // Drop the packet, as we are the original sender.
                 return Ok(());
@@ -365,7 +368,10 @@ async fn relay_mesh_packet(pl: &gw::UplinkFrame, mut packet: MeshPacket) -> Resu
         }
         packets::Payload::Event(pl) => {
             if pl.relay_id == relay_id {
-                trace!("Dropping packet as this relay was the sender");
+                trace!(
+                    "Dropping packet as this relay was the sender, uplink_id: {}",
+                    rx_info.uplink_id
+                );
 
                 // Drop the packet, as we are the sender.
                 return Ok(());
