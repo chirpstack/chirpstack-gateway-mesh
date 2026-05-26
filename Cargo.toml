@@ -51,7 +51,7 @@
   aes = "0.9"
 
 [dev-dependencies]
-  zeromq = "0.5"
+  zeromq = "0.6"
   bytes = "1.11"
 
 [profile.release]
